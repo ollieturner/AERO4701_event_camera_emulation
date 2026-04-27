@@ -1,3 +1,17 @@
+# test.py from dt_apriltags git repo
+# Reads camera intrinsics and tag characteristics from camera_info.yaml
+# Uses test_image.png
+
+# Three tests: 
+# - Detect tags in a single sample image
+# - Pose estimation under rotation
+# - Detect multiple tags
+# Measures performance with time for each tag detection
+# Does pose estimation too
+
+# Has not been run locally, just using as code inspiration
+
+
 from dt_apriltags import Detector
 import numpy
 import os

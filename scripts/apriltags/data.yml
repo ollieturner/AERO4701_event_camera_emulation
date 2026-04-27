@@ -1,0 +1,10 @@
+mode: separate-outputs
+parent: d93fca33ec026010b521b3587beb5897dff43189a8e1b4da078846c40d680dcei0
+postage: 690
+inscriptions:
+- file: mango.avif
+  metadata:
+    title: test
+- file: mango2.avif
+  metadata:
+    title: test

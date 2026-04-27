@@ -1,8 +1,12 @@
+# Baseline/simple tag detection in a single image read from file
+# Prints out tag IDs, centre and corners
+
+# Make sure in apriltags/ folder in order to read image.png properly
+
 import cv2
 from dt_apriltags import Detector
 
-
-# 1. Initialize the detector
+# Initialise the detector
 at_detector = Detector(families='tag36h11',
                        nthreads=1,
                        quad_decimate=1.0,
@@ -11,16 +15,14 @@ at_detector = Detector(families='tag36h11',
                        decode_sharpening=0.25,
                        debug=0)
 
-
-# MAKE SURE IN RIGHT FOLDER/ADD FOLDER PATH
+# Read image and turn into grayscale for tag detection
 gray = cv2.imread('image.png', cv2.IMREAD_GRAYSCALE)
 
-# 3. Detect tags
-# tags = at_detector.detect(gray)
+# Detect tags
 tags = at_detector.detect(gray, estimate_tag_pose=False, camera_params=None, tag_size=None)
 
-# 4. Access results
+# Print out ID, centre and corner coordinates for each tag detected
 for tag in tags:
     print(f"Tag ID: {tag.tag_id}")
-    print(f"Center: {tag.center}")
+    print(f"Centre: {tag.center}")
     print(f"Corners: {tag.corners}")
