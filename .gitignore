@@ -19,3 +19,5 @@ tmp/
 # Videos folder 
 videos/
 venv/
+
+*mp4
