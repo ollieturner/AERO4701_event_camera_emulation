@@ -16,3 +16,6 @@ videos/ is untracked by .gitignore - upload these separately to google drive to 
 run frame_tag_calibration to calibrate camera intrinsics
 
 then frame_tag_pose to use on (later live) video stream
+
+
+pip install scikit-image not skimage
