@@ -19,5 +19,10 @@ tmp/
 # Videos folder 
 videos/
 venv/
+hist_venv/
 
 *mp4
+
+event_histograms/
+
+scripts/checkerboard/checkerboard_imgs/
