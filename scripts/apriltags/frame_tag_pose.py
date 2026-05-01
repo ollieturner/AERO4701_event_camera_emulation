@@ -7,11 +7,11 @@ import yaml
 from dt_apriltags import Detector
 
 # Load camera parameters from YAML
-# with open('camera_info.yaml', 'r') as f:
-#     cam_data = yaml.safe_load(f)
-
-with open('data.yaml', 'r') as f:
+with open('camera_info.yaml', 'r') as f:
     cam_data = yaml.safe_load(f)
+
+# with open('data.yaml', 'r') as f:
+#     cam_data = yaml.safe_load(f)
 
 
 # Extract K and reshape
