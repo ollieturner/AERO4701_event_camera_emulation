@@ -2,6 +2,12 @@ import numpy as np
 import cv2 as cv
 import glob
 
+import os
+
+# create output folder once (put near top of script)
+output_dir = "outputs"
+os.makedirs(output_dir, exist_ok=True)
+
 # ==============================
 # PARAMETERS
 # ==============================
@@ -13,13 +19,60 @@ MAX_BOARDS = 3
 SQUARE_SIZE = 0.00225  # metres (example: 24 mm per square)
 
 
-# Prepare object points
-objp = np.zeros((CHESSBOARD[0]*CHESSBOARD[1], 3), np.float32)
-objp[:, :2] = np.mgrid[0:CHESSBOARD[0], 0:CHESSBOARD[1]].T.reshape(-1, 2)
+L = 0.034511
+h = np.sqrt(3)/2 * L
+
+board_centres = np.array([
+    [0,  2*h/3, 0],        # top
+    [-L/2, -h/3, 0],       # bottom-left
+    [ L/2, -h/3, 0]        # bottom-right
+])
+
+def rotation_towards(origin):
+    direction = origin / np.linalg.norm(origin)
+    z = np.array([0, 0, 1])
+
+    # crude but effective: align board normal with outward vector
+    v = np.cross(z, direction)
+    s = np.linalg.norm(v)
+    c = np.dot(z, direction)
+
+    if s == 0:
+        return np.eye(3)
+
+    vx = np.array([
+        [0, -v[2], v[1]],
+        [v[2], 0, -v[0]],
+        [-v[1], v[0], 0]
+    ])
+
+    R = np.eye(3) + vx + vx @ vx * ((1 - c) / (s**2))
+    return R
+
+
+objpoints_3boards = []
+
+CHESSBOARD = (5, 3)
+
+grid = np.mgrid[0:CHESSBOARD[0], 0:CHESSBOARD[1]].T.reshape(-1, 2)
+grid = np.hstack([grid * SQUARE_SIZE, np.zeros((grid.shape[0], 1))])
+
+for centre in board_centres:
+    R = rotation_towards(centre)
+
+    rotated = (R @ grid.T).T
+    translated = rotated + centre
+
+    objpoints_3boards.append(translated.astype(np.float32))
+
+
+# # Prepare object points
+# objp = np.zeros((CHESSBOARD[0]*CHESSBOARD[1], 3), np.float32)
+# objp[:, :2] = np.mgrid[0:CHESSBOARD[0], 0:CHESSBOARD[1]].T.reshape(-1, 2)
 
 print("Starting program...")
 
-images = glob.glob('scripts/pose_estimation/board_imgs/*.png')
+images = glob.glob('scripts/pose_estimation/board_imgs/*.jpeg')
 
 # ==============================
 # HELPER: DRAW AXES
@@ -48,7 +101,11 @@ for fname in images:
     ret, corners = cv.findChessboardCorners(gray, CHESSBOARD, None)
 
     if ret:
-        objpoints.append(objp)
+        # objpoints.append(objp)
+        objp_calib = np.zeros((CHESSBOARD[0]*CHESSBOARD[1], 3), np.float32)
+        objp_calib[:, :2] = np.mgrid[0:CHESSBOARD[0], 0:CHESSBOARD[1]].T.reshape(-1, 2) * SQUARE_SIZE
+        objpoints.append(objp_calib)
+
         corners2 = cv.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
         imgpoints.append(corners2)
 
@@ -85,7 +142,15 @@ for fname in images:
         )
 
         # Pose estimation
-        success, rvec, tvec = cv.solvePnP(objp, corners2, mtx, dist)
+        # success, rvec, tvec = cv.solvePnP(objp, corners2, mtx, dist)
+        obj_model = objpoints_3boards[boards_found]
+
+        success, rvec, tvec = cv.solvePnP(
+            obj_model,
+            corners2,
+            mtx,
+            dist
+        )
 
         if success:
             print(f"\nImage: {fname}, Board #{boards_found+1}")
@@ -93,9 +158,36 @@ for fname in images:
             print("tvec:\n", tvec)
 
             imgpts, _ = cv.projectPoints(axis, rvec, tvec, mtx, dist)
-            img = draw_axes(img, corners2, imgpts)
+            # img = draw_axes(img, corners2, imgpts)
 
             cv.drawChessboardCorners(img, CHESSBOARD, corners2, True)
+            # # draw corners (thicker visualisation)
+            # cv.drawChessboardCorners(img, CHESSBOARD, corners2, False)
+
+            # corners_int = corners2.astype(int)
+
+            # for i in range(len(corners_int) - 1):
+            #     cv.line(img,
+            #             tuple(corners_int[i][0]),
+            #             tuple(corners_int[i+1][0]),
+            #             (0, 255, 255),
+            #             4)
+
+            # label board ID
+            label = boards_found + 1
+            corner = tuple(corners2[0].ravel().astype(int))
+
+            cv.putText(
+                img,
+                f"{label}",
+                (corner[0] + 10, corner[1] - 30),
+                cv.FONT_HERSHEY_SIMPLEX,
+                5,
+                (0, 0, 255),
+                6,
+                cv.LINE_AA
+            )
+
 
         # ==============================
         # MASK OUT DETECTED BOARD
@@ -104,7 +196,20 @@ for fname in images:
         cv.fillConvexPoly(working_img, hull, 0)
 
         boards_found += 1
-    cv.imshow('Multi Pose', img)
+    # cv.imshow('Multi Pose', img)
+    
+    base = os.path.basename(fname)
+    name, _ = os.path.splitext(base)
+
+    output_name = os.path.join(output_dir, f"{name}_multi_pose.png")
+
+    success = cv.imwrite(output_name, img)
+
+    print(f"[SAVE] {output_name} -> {success}")
+
+    # output_name = f"multi_pose_{fname.split('/')[-1]}"
+    # cv.imwrite(output_name, img)
+
 
 # Keep window open until user closes or presses ESC
 while True:
