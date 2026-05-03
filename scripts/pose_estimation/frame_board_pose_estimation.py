@@ -160,18 +160,18 @@ for fname in images:
             imgpts, _ = cv.projectPoints(axis, rvec, tvec, mtx, dist)
             # img = draw_axes(img, corners2, imgpts)
 
-            cv.drawChessboardCorners(img, CHESSBOARD, corners2, True)
-            # # draw corners (thicker visualisation)
-            # cv.drawChessboardCorners(img, CHESSBOARD, corners2, False)
+            # cv.drawChessboardCorners(img, CHESSBOARD, corners2, True)
+            # draw corners (thicker visualisation)
+            cv.drawChessboardCorners(img, CHESSBOARD, corners2, False)
 
-            # corners_int = corners2.astype(int)
+            corners_int = corners2.astype(int)
 
-            # for i in range(len(corners_int) - 1):
-            #     cv.line(img,
-            #             tuple(corners_int[i][0]),
-            #             tuple(corners_int[i+1][0]),
-            #             (0, 255, 255),
-            #             4)
+            for i in range(len(corners_int) - 1):
+                cv.line(img,
+                        tuple(corners_int[i][0]),
+                        tuple(corners_int[i+1][0]),
+                        (0, 255, 255),
+                        13)
 
             # label board ID
             label = boards_found + 1
