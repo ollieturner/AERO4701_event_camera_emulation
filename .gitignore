@@ -26,3 +26,6 @@ hist_venv/
 event_histograms/
 
 scripts/checkerboard/checkerboard_imgs/
+
+*jpeg
+*png

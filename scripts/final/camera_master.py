@@ -37,6 +37,12 @@ CHESSBOARD, MAX_BOARDS, SQUARE_SIZE, L, MAX_CALIB_ATTEMPTS = h.setup_calib_param
 # Ground truth chessboard corner coordinates
 objpoints_3boards = h.get_cboard_gt()
 
+# # Define ROIS of chessboards for calibration
+# ROIS = h.define_rois()
+# # outputs/IMG_3588.jpeg
+# h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
+
+
 
 ## WAIT FOR START
 # TODO threading? check with others for integration
@@ -45,6 +51,7 @@ objpoints_3boards = h.get_cboard_gt()
 ## PREPARE CAMERA
 # Read parameters in from file
 # TODO Read parameters in from file to open camera?
+args = h.prep_camera_params()
 
 
 ## OPEN AND CALIBRATE CAMERA 
@@ -53,9 +60,15 @@ CALIB_ATTEMPTS = 0
 
 while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     
-    # Take 2s video and save to calibration folder
-    # h.save_calib_video()
-    
+    # # Take 2s video and save to calibration folder
+    # h.save_calib_video(args)
+
+    # TODO Delete
+    # Define ROIS of chessboards for calibration
+    ROIS = h.define_rois()
+    # outputs/IMG_3588.jpeg
+    h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
+
     # Load images
     images = glob.glob(f"{calib_folder}/*.jpeg")
     if len(images) < 5:
@@ -64,7 +77,8 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
         continue
     
     # Detect chessboards
-    objpoints, imgpoints, img_size = h.detect_cboard_calib(images)
+    # TODO restrict to region of interest
+    objpoints, imgpoints, img_size = h.detect_cboard_calib(images, ROIS)
     if len(objpoints) < 3:
         print("Not enough valid detections, retrying...")
         CALIB_ATTEMPTS += 1
@@ -96,8 +110,10 @@ print("Camera calibration complete\n")
 
 ## RECORD EXPERIMENT 
 
+# Open camera and record for 30 seconds
+# Save frames to file 
+# Later: save event spatial histograms
 
 
-# Record video for 30s (stream, + event + spatial?)
-# Save frames to file
-# Save event data in real time (replicate real)
+# Data processing
+# Pose estimates + save to file
