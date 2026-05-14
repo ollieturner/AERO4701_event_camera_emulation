@@ -37,10 +37,10 @@ CHESSBOARD, MAX_BOARDS, SQUARE_SIZE, L, MAX_CALIB_ATTEMPTS = h.setup_calib_param
 # Ground truth chessboard corner coordinates
 objpoints_3boards = h.get_cboard_gt()
 
-# # Define ROIS of chessboards for calibration
-# ROIS = h.define_rois()
-# # outputs/IMG_3588.jpeg
-# h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
+# Define ROIS of chessboards for calibration
+ROIS = h.define_rois()
+# outputs/IMG_3588.jpeg
+h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
 
 
@@ -50,7 +50,6 @@ objpoints_3boards = h.get_cboard_gt()
 
 ## PREPARE CAMERA
 # Read parameters in from file
-# TODO Read parameters in from file to open camera?
 args = h.prep_camera_params()
 
 
@@ -61,12 +60,6 @@ CALIB_ATTEMPTS = 0
 while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     # # Take 2s video and save to calibration folder
     # h.save_calib_video(args)
-
-    # TODO Comment after calibrating
-    # Define ROIS of chessboards for calibration
-    ROIS = h.define_rois()
-    # outputs/IMG_3588.jpeg
-    h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
     # Load images
     images = glob.glob(f"{calib_folder}/*.jpeg")
@@ -83,7 +76,7 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
         continue
 
     # Calibrate camera
-    ret, mtx, dist, _, _ = cv.calibrateCamera(
+    ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(
         objpoints, imgpoints, img_size, None, None
     )
 
@@ -93,13 +86,17 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     print("Camera matrix:\n", mtx)
 
     # Cleanup (remove) calibration folder
-    # TODO uncomment this
+    # TODO uncomment this later
     # shutil.rmtree(calib_folder, ignore_errors=True)
 
     CALIB_FLAG = True
     CALIB_ATTEMPTS += 1
 
 print("Camera calibration complete\n")
+
+# Checking reprojection error after calibration
+# h.check_repoj_error(objpoints, rvecs, tvecs, mtx, dist, imgpoints)
+
 
 
 ## SET/WAIT
@@ -114,13 +111,9 @@ print("Camera calibration complete\n")
 
 
 ## BASELINE DATA PROCESSING
-# Cycle through frames and do pose estimation
-# Save all pose estimates to file
-# Then delete frames 
-# (test first on calibration images)
-
 print("Processing baseline frames")
 
+# Cycle through images in baseline/, estimate poses, save to file then delete images 
 h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS)
 
 

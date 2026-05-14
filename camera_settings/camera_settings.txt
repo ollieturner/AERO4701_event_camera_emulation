@@ -1,0 +1,3 @@
+# Camera settings
+
+video_device = 0
