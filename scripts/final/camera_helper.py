@@ -11,8 +11,10 @@ def setup_directories():
     os.makedirs(output_dir, exist_ok=True)
     calib_folder = "outputs/calibration"
     os.makedirs(calib_folder, exist_ok=True)
+    baseline_folder = "outputs/baseline"
+    os.makedirs(calib_folder, exist_ok=True)
 
-    return output_dir, calib_folder
+    return output_dir, calib_folder, baseline_folder
 
 
 def setup_calib_parameters():
@@ -246,7 +248,7 @@ def prep_camera_params():
 
 
 # TODO could make timing better
-def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/calibration"):
+def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/baseline"):
     # Take a 2 second video and save frames - use VideoCapture/imwrite for high quality
     try:
         camera_device = cv.VideoCapture(int(args.video_device))
@@ -254,7 +256,7 @@ def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/calibration
         camera_device = cv.VideoCapture(args.video_device)
 
     if not camera_device.isOpened():
-        print('[ERROR] Could not access camera')
+        print('Could not access camera')
         sys.exit()
 
     frames = []
@@ -269,9 +271,42 @@ def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/calibration
 
     camera_device.release()
 
-    # Save video to calibration folder
+    # Save video to calibration folder TODO check this
     shutil.rmtree(calib_folder, ignore_errors=True)
     os.makedirs(calib_folder, exist_ok=True)
 
     for i, frame in enumerate(frames):
         cv.imwrite(f"{calib_folder}/frame_{i:04d}.jpeg", frame)
+
+
+
+def save_exp_video(args, exp_time = 5.0, baseline_folder = "outputs/baseline"):
+    # Take a 30 second video and save frames - use VideoCapture/imwrite for high quality
+    try:
+        camera_device = cv.VideoCapture(int(args.video_device))
+    except ValueError:
+        camera_device = cv.VideoCapture(args.video_device)
+
+    if not camera_device.isOpened():
+        print('Could not access camera')
+        sys.exit()
+
+    frames = []
+    start_time = time.time()
+
+    # Run for experiment time and append every frame
+    while time.time() - start_time < exp_time:
+        ret, frame = camera_device.read()
+        if not ret:
+            continue
+
+        frames.append(frame)
+
+    camera_device.release()
+
+    # Save video to calibration folder TODO check this
+    shutil.rmtree(baseline_folder, ignore_errors=True)
+    os.makedirs(baseline_folder, exist_ok=True)
+
+    for i, frame in enumerate(frames):
+        cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
