@@ -316,37 +316,155 @@ def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/baseline"):
         cv.imwrite(f"{calib_folder}/frame_{i:04d}.jpeg", frame)
 
 
-# Take a 30 second video and save frames
-def save_exp_video(args, exp_time = 5.0, baseline_folder = "outputs/baseline"):
-    # Use VideoCapture/imwrite for high quality
+# # Take a experiment video and save frames
+# def save_exp_video(args, exp_time = 5.0, baseline_folder = "outputs/baseline"):
+#     # Use VideoCapture/imwrite for high quality
+#     try:
+#         camera_device = cv.VideoCapture(int(args.video_device))
+#     except ValueError:
+#         camera_device = cv.VideoCapture(args.video_device)
+
+#     if not camera_device.isOpened():
+#         print('Could not access camera')
+#         sys.exit()
+
+#     frames = []
+#     start_time = time.time()
+
+#     # Run for experiment time and append every frame
+#     while time.time() - start_time < exp_time:
+#         ret, frame = camera_device.read()
+#         if not ret:
+#             continue
+
+#         frames.append(frame)
+
+#     camera_device.release()
+
+#     # Save video to calibration folder TODO check this
+#     shutil.rmtree(baseline_folder, ignore_errors=True)
+#     os.makedirs(baseline_folder, exist_ok=True)
+
+#     for i, frame in enumerate(frames):
+#         cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
+
+
+
+
+def save_exp_video(args, exp_time=5.0, WINDOW_SIZE = 30, baseline_folder="outputs/baseline"):
+
+    import cv2 as cv
+    import numpy as np
+    import os
+    import time
+    import shutil
+
+    from event_camera_emulation.emulator import EventCameraEmulator
+
+    # Setup camera
     try:
         camera_device = cv.VideoCapture(int(args.video_device))
     except ValueError:
         camera_device = cv.VideoCapture(args.video_device)
 
     if not camera_device.isOpened():
-        print('Could not access camera')
+        print("Could not access camera")
         sys.exit()
 
+    # Setup output folders
+    shutil.rmtree(baseline_folder, ignore_errors=True)
+    os.makedirs(baseline_folder, exist_ok=True)
+    event_frame_dir = "event_data/frames"
+    event_hist_dir = "event_data/histograms"
+    shutil.rmtree("event_data", ignore_errors=True)
+    os.makedirs(event_frame_dir, exist_ok=True)
+    os.makedirs(event_hist_dir, exist_ok=True)
+
+    # Initialise event camera emulator
+    e_camera_emulator = EventCameraEmulator()
+
     frames = []
+    frame_idx = 0
     start_time = time.time()
 
-    # Run for experiment time and append every frame
+    # Check first frame
+    ret, prev_frame = camera_device.read()
+    if not ret:
+        print("Could not read first frame")
+        sys.exit()
+
+    event_hist = None
+
+    # Record data for experiment time
     while time.time() - start_time < exp_time:
+        # Read frame
         ret, frame = camera_device.read()
         if not ret:
             continue
-
+        
+        # Add frame
         frames.append(frame)
+
+        # Emulate event camera
+        event_image = e_camera_emulator.get_events_image_rgb(
+            frame,
+            prev_frame,
+            30,
+            record_off_events=True,
+            register_off_events_as_on=False
+        )
+
+        visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
+        prev_frame = frame
+
+        # Save event frame (TODO for debugging)
+        cv.imwrite(
+            os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
+            visual_event_image
+        )
+
+        # Add to spatial histogram
+        if event_image.ndim == 3:
+            gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
+        else:
+            gray_event = event_image
+
+        gray_event = gray_event.astype(np.float32)
+
+        if event_hist is None:
+            event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+        event_hist += np.abs(gray_event)
+
+        # Save event spatial histogram after accumulation
+        if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+            # Save raw histogram data
+            raw_path = os.path.join(event_hist_dir, f"event_hist_raw_{frame_idx:05d}.npy")
+            np.save(raw_path, event_hist)
+
+            # Save normalised visualisation of histogram data
+            hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX)
+            hist_vis = hist_vis.astype(np.uint8)
+            vis_path = os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png")
+            cv.imwrite(vis_path, hist_vis)
+
+            # Reset window
+            event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+        frame_idx += 1
 
     camera_device.release()
 
-    # Save video to calibration folder TODO check this
-    shutil.rmtree(baseline_folder, ignore_errors=True)
-    os.makedirs(baseline_folder, exist_ok=True)
-
+    # Save RGB frames for baseline
     for i, frame in enumerate(frames):
         cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
+
+
+
+
+
+
+
 
 
 

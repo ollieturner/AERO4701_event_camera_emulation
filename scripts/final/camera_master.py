@@ -1,19 +1,14 @@
+## RUN INSTRUCTIONS
+# .\venv\Scripts\Activate.ps1
+# source venv/bin/activate
 
-# Setup
-# Wait for start/stop recording flag
-# Read parameters from file
-# Open camera
-# Calibrate camera - set/raise flag (keep trying/repeating until successful. if 5 failures, abort)
-# Wait for next flag?
+# TODO test event data saving and running in linux 
+# TODO run full fresh test
+# TODO check against tests
 
-# Record video for 30s (stream, + event + spatial?)
-# Save frames to file
-# Save event data in real time (replicate real)
+# TODO check flags/calibration process with Lincoln 
+# TODO Prepare raspberry pi camera 3 version
 
-# Flag?
-# Then read through images for baseline pose estimation
-# Save to file
-# Wipe images 
 
 ## LIBRARIES
 # Import libraries
@@ -103,11 +98,12 @@ print("Camera calibration complete\n")
 # TODO check with integration
 
 
-## RECORD EXPERIMENT 
-# # Take video with baseline images/frames
-# print("Starting experiment")
-# h.save_exp_video(args)
-# print("Experiment recording complete")
+# RECORD EXPERIMENT 
+# Take video with baseline images/frames
+# TODO add in event camera, histograms and saving the data (for now, save event frames and spatial histograms)
+print("Starting experiment")
+h.save_exp_video(args)
+print("Experiment recording complete")
 
 
 ## BASELINE DATA PROCESSING
