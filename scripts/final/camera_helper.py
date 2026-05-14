@@ -5,6 +5,7 @@ import shutil
 import os
 import argparse
 import sys
+import glob
 
 def setup_directories():
     output_dir = "outputs"
@@ -12,9 +13,11 @@ def setup_directories():
     calib_folder = "outputs/calibration"
     os.makedirs(calib_folder, exist_ok=True)
     baseline_folder = "outputs/baseline"
-    os.makedirs(calib_folder, exist_ok=True)
+    os.makedirs(baseline_folder, exist_ok=True)
+    baseline_pose_folder = "outputs/baseline_pose"
+    os.makedirs(baseline_pose_folder, exist_ok=True)
 
-    return output_dir, calib_folder, baseline_folder
+    return output_dir, calib_folder, baseline_folder, baseline_pose_folder
 
 
 def setup_calib_parameters():
@@ -70,7 +73,7 @@ def test_draw_rois(image_path, ROIS, output_dir="outputs", name="roi_debug.png")
 
     img = cv.imread(image_path)
 
-    print(img.shape[::-1])
+    # print(img.shape[::-1])
 
     if img is None:
         raise ValueError(f"Could not read image: {image_path}")
@@ -175,21 +178,10 @@ def detect_cboard_calib(images, ROIS, CHESSBOARD=(5,3), SQUARE_SIZE=0.00225):
             # apply mask (keep full image size!)
             masked_img = cv.bitwise_and(gray, gray, mask=mask)
 
-            # cv.imshow("window", masked_img)
-            # cv.waitKey(0)
-            # cv.destroyAllWindows()
-            
-            # # Crop
-            # crop = gray[y1:y2, x1:x2]
-
             ret, corners = cv.findChessboardCorners(masked_img, CHESSBOARD, None)
 
             if not ret:
                 continue
-
-            # # Convert ROI coords to full image coords (account for crop)
-            # corners[:, :, 0] += x1
-            # corners[:, :, 1] += y1
 
             corners2 = cv.cornerSubPix(gray, corners, (5,5), (-1,-1), criteria)
 
@@ -310,3 +302,178 @@ def save_exp_video(args, exp_time = 5.0, baseline_folder = "outputs/baseline"):
 
     for i, frame in enumerate(frames):
         cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
+
+
+
+# Cycle through frames, do pose estimation
+# Save all pose estimates to file
+# Delete frames
+# (test first on calibration images)
+
+
+def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, MAX_BOARDS = 3, CHESSBOARD = (5, 3), baseline_folder = "outputs/calibration", pose_folder = "outputs/baseline_pose"):
+    # TODO Read in images 
+    images = glob.glob(f"{baseline_folder}/*.jpeg")
+
+    # TODO do over all the ROIs
+
+    # TODO Test on an image and save each with pose estimation detection
+    
+    axis = np.float32([[3,0,0],[0,3,0],[0,0,-3]]).reshape(-1,3)
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+
+    for fname in images:
+        img = cv.imread(fname)
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+        for board_id, roi in enumerate(ROIS):
+
+            x1, y1, x2, y2 = roi
+
+            # Mask out outside ROI
+            mask = np.zeros_like(gray, dtype=np.uint8)
+            mask[y1:y2, x1:x2] = 255
+
+            # apply mask (keep full image size!)
+            working_img = cv.bitwise_and(gray, gray, mask=mask)
+
+            ret, corners = cv.findChessboardCorners(
+                working_img, CHESSBOARD,
+                cv.CALIB_CB_ADAPTIVE_THRESH + cv.CALIB_CB_NORMALIZE_IMAGE
+            )
+
+            # Skip if no image
+            # TODO blank out pose estimation
+            if not ret:
+                break
+
+            # Refine
+            corners2 = cv.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
+
+            # Pose estimation
+            obj_model = objpoints_3boards[board_id]
+
+            success, rvec, tvec = cv.solvePnP(obj_model, corners2, mtx, dist)
+
+            # TODO Comment out below
+            # Drawing board onto image (debugging)
+            if success:  
+                print(f"\nImage: {fname}, Board #{board_id+1}")
+                print("rvec:\n", rvec)
+                print("tvec:\n", tvec)
+
+                imgpts, _ = cv.projectPoints(axis, rvec, tvec, mtx, dist)
+
+                # Draw corners with thicker visualisation
+                cv.drawChessboardCorners(img, CHESSBOARD, corners2, False)
+
+                corners_int = corners2.astype(int)
+
+                for i in range(len(corners_int) - 1):
+                    cv.line(img, tuple(corners_int[i][0]), tuple(corners_int[i+1][0]), (0, 255, 255), 13)
+
+                # Label board ID
+                label = board_id + 1
+                corner = tuple(corners2[0].ravel().astype(int))
+
+                cv.putText(img, f"{label}", (corner[0] + 10, corner[1] - 30), cv.FONT_HERSHEY_SIMPLEX,
+                    5, (0, 0, 255), 6, cv.LINE_AA)
+
+        # cv.imshow('Multi Pose', img)
+        
+        base = os.path.basename(fname)
+        name, _ = os.path.splitext(base)
+
+        output_name = os.path.join(pose_folder, f"{name}_multi_pose.png")
+
+        success = cv.imwrite(output_name, img)
+
+        print(f"SAVE {output_name} -> {success}")
+
+        output_name = f"multi_pose_{fname.split('/')[-1]}"
+        cv.imwrite(output_name, img)
+
+
+# Working
+# def process_baseline_data(objpoints_3boards, mtx, dist, MAX_BOARDS = 3, CHESSBOARD = (5, 3), baseline_folder = "outputs/calibration", pose_folder = "outputs/baseline_pose"):
+#     # TODO Read in images 
+#     images = glob.glob(f"{baseline_folder}/*.jpeg")
+
+#     # TODO do over all the ROIs
+
+#     # TODO Test on an image and save each with pose estimation detection
+    
+#     axis = np.float32([[3,0,0],[0,3,0],[0,0,-3]]).reshape(-1,3)
+#     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+
+#     for fname in images:
+#         img = cv.imread(fname)
+#         gray_full = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+#         working_img = gray_full.copy()
+#         boards_found = 0
+
+#         while boards_found < MAX_BOARDS:
+#             ret, corners = cv.findChessboardCorners(
+#                 working_img, CHESSBOARD,
+#                 cv.CALIB_CB_ADAPTIVE_THRESH + cv.CALIB_CB_NORMALIZE_IMAGE
+#             )
+
+#             # Skip if no image
+#             if not ret:
+#                 break
+
+#             # Refine
+#             corners2 = cv.cornerSubPix(gray_full, corners, (11,11), (-1,-1), criteria)
+
+#             # Pose estimation
+#             obj_model = objpoints_3boards[boards_found]
+
+#             success, rvec, tvec = cv.solvePnP(obj_model, corners2, mtx, dist)
+
+#             # TODO Comment out below
+#             # Drawing board onto image (debugging)
+#             if success:  
+#                 print(f"\nImage: {fname}, Board #{boards_found+1}")
+#                 print("rvec:\n", rvec)
+#                 print("tvec:\n", tvec)
+
+#                 imgpts, _ = cv.projectPoints(axis, rvec, tvec, mtx, dist)
+
+#                 # Draw corners with thicker visualisation
+#                 cv.drawChessboardCorners(img, CHESSBOARD, corners2, False)
+
+#                 corners_int = corners2.astype(int)
+
+#                 for i in range(len(corners_int) - 1):
+#                     cv.line(img, tuple(corners_int[i][0]), tuple(corners_int[i+1][0]), (0, 255, 255), 13)
+
+#                 # Label board ID
+#                 label = boards_found + 1
+#                 corner = tuple(corners2[0].ravel().astype(int))
+
+#                 cv.putText(img, f"{label}", (corner[0] + 10, corner[1] - 30), cv.FONT_HERSHEY_SIMPLEX,
+#                     5, (0, 0, 255), 6, cv.LINE_AA)
+
+#             # Mask out detected board 
+#             # TODO replace with ROI bounds
+#             hull = cv.convexHull(corners.astype(np.int32))
+#             cv.fillConvexPoly(working_img, hull, 0)
+
+#             boards_found += 1
+#         # cv.imshow('Multi Pose', img)
+        
+#         base = os.path.basename(fname)
+#         name, _ = os.path.splitext(base)
+
+#         output_name = os.path.join(pose_folder, f"{name}_multi_pose.png")
+
+#         success = cv.imwrite(output_name, img)
+
+#         print(f"SAVE {output_name} -> {success}")
+
+#         output_name = f"multi_pose_{fname.split('/')[-1]}"
+#         cv.imwrite(output_name, img)
+
+
+
