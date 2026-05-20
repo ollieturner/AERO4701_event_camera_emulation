@@ -26,15 +26,16 @@ print("Starting camera program...")
 # Setup directories
 output_dir, calib_folder, baseline_folder, baseline_pose_folder = h.setup_directories()
 
+## TODO: CHANGE TO NEW CHESSBOARD LAYOUT
 # Calibration parameters 
 CHESSBOARD, MAX_BOARDS, SQUARE_SIZE, L, MAX_CALIB_ATTEMPTS = h.setup_calib_parameters()
 
+## TODO: CHANGE TO NEW CHESSBOARD LAYOUT
 # Ground truth chessboard corner coordinates
 objpoints_3boards = h.get_cboard_gt()
 
 # Define ROIS of chessboards for calibration
 ROIS = h.define_rois()
-# outputs/IMG_3588.jpeg
 h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
 
@@ -94,13 +95,12 @@ print("Camera calibration complete\n")
 
 
 
-## SET/WAIT
+# # SET/WAIT
 # TODO check with integration
 
 
 # RECORD EXPERIMENT 
 # Take video with baseline images/frames
-# TODO add in event camera, histograms and saving the data (for now, save event frames and spatial histograms)
 print("Starting experiment")
 h.save_exp_video(args)
 print("Experiment recording complete")

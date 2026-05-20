@@ -49,12 +49,14 @@ def define_rois(width=640, height=480, scale=0.38):
 
     # offsets for triangular layout
     dx = int(width * 0.16)
-    dy = int(height * 0.16)
+    dy = int(height * 0.12)
+
+    top_extra = int(height * 0.1)   # extra upward movement
 
     ROIS = [
         # top board
-        (cx - w//2, cy - h//2 - dy,
-         cx + w//2, cy + h//2 - dy),
+        (cx - w//2, cy - h//2 - dy - top_extra,
+         cx + w//2, cy + h//2 - dy - top_extra),
 
         # bottom-left board
         (cx - w//2 - dx, cy - h//2 + dy,
@@ -145,12 +147,18 @@ def get_cboard_gt(L = 0.034511, CHESSBOARD = (5, 3), SQUARE_SIZE = 0.00225):
 
 def detect_cboard_calib(images, ROIS, CHESSBOARD=(5,3), SQUARE_SIZE=0.00225):
 
+    debug_folder="outputs/calibration_test"
+
+    # Create debug folder
+    shutil.rmtree(debug_folder, ignore_errors=True)
+    os.makedirs(debug_folder, exist_ok=True)
+
     print("Calibrating camera...")
 
     if ROIS is None:
         raise ValueError("ROIs must be defined for multi-board calibration")
 
-    # criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
     num_boards = len(ROIS)
 
@@ -163,9 +171,13 @@ def detect_cboard_calib(images, ROIS, CHESSBOARD=(5,3), SQUARE_SIZE=0.00225):
     objp_base[:, :2] = np.mgrid[0:CHESSBOARD[0],
                                 0:CHESSBOARD[1]].T.reshape(-1, 2) * SQUARE_SIZE
 
+    save_idx = 0
+    
     for fname in images:
         img = cv.imread(fname)
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+        debug_img = img.copy()
 
         for board_id, roi in enumerate(ROIS):
 
@@ -179,17 +191,40 @@ def detect_cboard_calib(images, ROIS, CHESSBOARD=(5,3), SQUARE_SIZE=0.00225):
             masked_img = cv.bitwise_and(gray, gray, mask=mask)
 
             # TODO could add in exhaustive for calibration? experiment
-            # ret, corners = cv.findChessboardCorners(masked_img, CHESSBOARD, None)
-            ret, corners = cv.findChessboardCornersSB(masked_img, CHESSBOARD, 
-                    flags = cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
+            ret, corners = cv.findChessboardCorners(masked_img, CHESSBOARD, None)
+            # ret, corners = cv.findChessboardCornersSB(masked_img, CHESSBOARD, 
+            #         flags = cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
 
             if not ret:
                 continue
 
-            # corners2 = cv.cornerSubPix(gray, corners, (5,5), (-1,-1), criteria)
+            corners2 = cv.cornerSubPix(gray, corners, (5,5), (-1,-1), criteria)
 
             objpoints[board_id].append(objp_base.copy())
             imgpoints[board_id].append(corners)
+
+            # Draw corners onto debug image
+            cv.drawChessboardCorners(
+                debug_img,
+                CHESSBOARD,
+                corners2,
+                ret
+            )
+
+            # Draw ROI rectangle
+            cv.rectangle(
+                debug_img,
+                (x1, y1),
+                (x2, y2),
+                (0, 255, 0),
+                2
+            )
+
+        # Save annotated image
+        save_path = f"{debug_folder}/calib_{save_idx:04d}.png"
+        cv.imwrite(save_path, debug_img)
+
+        save_idx += 1
 
     img_size = gray.shape[::-1]
 
@@ -285,12 +320,17 @@ def prep_camera_params(camera_file = "camera_settings/camera_settings.txt"):
 
 
 # TODO could make timing better
-def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/baseline"):
+def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/calibration"):
     # Take a 2 second video and save frames - use VideoCapture/imwrite for high quality
+    # try:
+    #     camera_device = cv.VideoCapture(int(args.video_device))
+    # except ValueError:
+    #     camera_device = cv.VideoCapture(args.video_device)
+
     try:
-        camera_device = cv.VideoCapture(int(args.video_device))
+        camera_device = cv.VideoCapture(int(args["video_device"]))
     except ValueError:
-        camera_device = cv.VideoCapture(args.video_device)
+        camera_device = cv.VideoCapture(args["video_device"])
 
     if not camera_device.isOpened():
         print('Could not access camera')
@@ -351,7 +391,7 @@ def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/baseline"):
 
 
 
-def save_exp_video(args, exp_time=5.0, WINDOW_SIZE = 30, baseline_folder="outputs/baseline"):
+def save_exp_video(args, exp_time=5.0, WINDOW_SIZE = 10, baseline_folder="outputs/baseline"):
 
     import cv2 as cv
     import numpy as np
@@ -363,9 +403,9 @@ def save_exp_video(args, exp_time=5.0, WINDOW_SIZE = 30, baseline_folder="output
 
     # Setup camera
     try:
-        camera_device = cv.VideoCapture(int(args.video_device))
+        camera_device = cv.VideoCapture(int(args["video_device"])) # args.video_device))
     except ValueError:
-        camera_device = cv.VideoCapture(args.video_device)
+        camera_device = cv.VideoCapture(args["video_device"]) # args.video_device)
 
     if not camera_device.isOpened():
         print("Could not access camera")
@@ -469,9 +509,15 @@ def save_exp_video(args, exp_time=5.0, WINDOW_SIZE = 30, baseline_folder="output
 
 
 # Cycling through frames, estimate pose then save to file 
-def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3), baseline_folder = "outputs/calibration", pose_folder = "outputs/baseline_pose"):
+def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3), baseline_folder = "outputs/baseline", pose_folder = "outputs/baseline_pose"):
     # Read in images 
-    images = glob.glob(f"{baseline_folder}/*.jpeg")
+    # images = glob.glob(f"{baseline_folder}/*.jpeg")
+    images = sorted(
+        glob.glob(os.path.join(baseline_folder, "*.jpeg"))
+    )
+    print("Found images:", len(images))
+
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
    
     # Define pose estimate file
     pose_txt_path = os.path.join(pose_folder, "baseline_poses.txt")
@@ -500,8 +546,9 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3
                 working_img = cv.bitwise_and(gray, gray, mask=mask)
 
                 # Detect chessboard corners
-                ret, corners = cv.findChessboardCornersSB(working_img, CHESSBOARD, 
-                    flags = cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
+                # ret, corners = cv.findChessboardCornersSB(working_img, CHESSBOARD, 
+                #     flags = cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
+                ret, corners = cv.findChessboardCorners(working_img, CHESSBOARD, None)
 
                 # Skip if no image
                 if not ret:
@@ -510,6 +557,8 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3
                     pose_file.write("rvec: 0 0 0\n")
                     pose_file.write("tvec: 0 0 0\n\n")
                     continue
+
+                corners = cv.cornerSubPix(gray, corners, (5,5), (-1,-1), criteria)
 
                 # Pose estimation
                 obj_model = objpoints_3boards[board_id]
@@ -540,7 +589,7 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3
                     corners_int = corners.astype(int)
 
                     for i in range(len(corners_int) - 1):
-                        cv.line(img, tuple(corners_int[i][0]), tuple(corners_int[i+1][0]), (0, 255, 255), 13)
+                        cv.line(img, tuple(corners_int[i][0]), tuple(corners_int[i+1][0]), (0, 255, 255), 5)
 
                     # Label board ID
                     label = board_id + 1
@@ -554,7 +603,7 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3
             name, _ = os.path.splitext(base)
             output_name = os.path.join(pose_folder, f"{name}_multi_pose.png")
             success = cv.imwrite(output_name, img)
-            print(f"SAVE {output_name} -> {success}")
+            # print(f"SAVE {output_name} -> {success}")
     
     # # Delete contents of baseline folder
     # for file_path in glob.glob(os.path.join(baseline_folder, "*")):
