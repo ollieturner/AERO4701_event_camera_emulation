@@ -11,6 +11,7 @@
 
 # TODO Add debug mode 
 # TODO change fps, process images on go don't save to file - have two different versions
+# TODO initialise messages to LCM/variables as false? don't need intialising? 
 
 
 ## LIBRARIES

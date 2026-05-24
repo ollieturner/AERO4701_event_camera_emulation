@@ -1,37 +1,56 @@
 import lcm
-from exlcm import payload_comp_msg_t
+from exlcm import payload_comp_msg_t, cam_msg_t
+import time
 
 ## RECEIVE FROM PAYLOAD COMP
-# Callback function
-def my_handler(channel, data):
-    msg = payload_comp_msg_t.decode(data)
-    print("Received message on channel \"%s\"" % channel)
-    print("   cam_enabled     = %s" % str(msg.cam_enabled))
-    print("   exp_enabled     = %s" % str(msg.exp_enabled))
-    print("")
+# Subscribe to and wait for msg from payload computer
+def wait_for_payload_comp_msg():
+    # Define msg container
+    received = {"msg": None}
 
+    def cam_handler(channel, data):
+        received["msg"] = payload_comp_msg_t.decode(data)
+        # print("Received message on channel \"%s\"" % channel)
+        # print("   cam_enabled     = %s" % str(received["msg"].cam_enabled))
+        # print("   exp_enabled     = %s" % str(received["msg"].exp_enabled))
+        # print("")
 
-# Intialise LCM
-lc = lcm.LCM()
+    lc = lcm.LCM()
+    sub = lc.subscribe("PAYLOAD_CAM", cam_handler)
 
-# Subscribe to PAYLOAD_CAM channel
-subscription = lc.subscribe("PAYLOAD_CAM", my_handler)
-
-# Wait for message 
-try:
-    while True:
+    # Wait for msg
+    while received["msg"] is None:
         lc.handle()
-except KeyboardInterrupt:
-    pass
+    
+    lc.unsubscribe(sub)
 
+    return received["msg"]
 
-# ## PUBLISH FROM CAM
-# # Create a message and fill in data fields
-# msg = cam_msg_t()
-# msg.exp_complete = True
+# Stop program untill cam msg received
+msg = wait_for_payload_comp_msg()
 
-# # Intialise LCM
-# lc = lcm.LCM()
+# Print out msg
+print("Continue program")
+print(msg.cam_enabled)
+print(msg.exp_enabled)
+print("\n")
 
-# # Publish message to PAYLOAD_CAM channel
-# lc.publish("PAYLOAD_CAM", msg.encode())
+# Buffer wait time
+time.sleep(3)
+
+## PUBLISH FROM CAM
+# Create a message and fill in data fields
+def publish_cam_msg():
+    # Define msg
+    msg = cam_msg_t()
+    msg.exp_complete = True
+
+    # Intialise LCM
+    lc = lcm.LCM()
+
+    # Publish message to PAYLOAD_CAM channel
+    lc.publish("PAYLOAD_CAM", msg.encode())
+
+    print("Message published")
+
+publish_cam_msg()
