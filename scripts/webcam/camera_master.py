@@ -45,6 +45,8 @@ h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
 ## WAIT FOR START
 # TODO threading? check with others for integration
+# define callback and make it sit in try, then only move on once message received
+# can use fileno for no blocking 
 
 
 ## PREPARE CAMERA

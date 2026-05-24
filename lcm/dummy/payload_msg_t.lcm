@@ -1,0 +1,12 @@
+package exlcm;
+
+struct payload_comp_msg_t
+{
+    boolean  cam_enabled;
+    boolean  exp_enabled;
+}
+
+struct cam_msg_t
+{
+    boolean  exp_complete;
+}
