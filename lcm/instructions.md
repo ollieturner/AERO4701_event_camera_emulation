@@ -6,6 +6,8 @@ in terminal: python3 cam.py (waits first, start here)
 in terminal: python3 payload_comp.py
 
 
+python3 lcm/webcam/camera_master.py
+
 
 
 to do:

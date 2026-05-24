@@ -13,9 +13,11 @@
 # TODO change fps, process images on go don't save to file - have two different versions
 # TODO initialise messages to LCM/variables as false? don't need intialising? 
 
-
 # TODO makes outputs folder on same level?
 # TODO split up message struct?
+# TODO check in flow
+
+# TODO put into one big while loop to abort/start experiments
 
 ## LIBRARIES
 # Import libraries
@@ -26,6 +28,7 @@ import os
 import shutil
 import camera_helper as h
 import lcm_helper as lcm_h
+import sys
 
 # Logging message
 print("Starting camera program...")
@@ -33,6 +36,7 @@ print("Starting camera program...")
 ## SETUP 
 # Setup directories
 output_dir, calib_folder, baseline_folder, baseline_pose_folder = h.setup_directories()
+MAX_CALIB_MSG_ATTEMPTS = 3
 
 ## TODO: CHANGE TO NEW CHESSBOARD LAYOUT
 # Calibration parameters 
@@ -48,24 +52,28 @@ ROIS = h.define_rois()
 
 
 ## WAIT FOR START
-# Stop program until payload comp msg received and camera is enabled
-# TODO check flow/msg with lincoln
-# TODO time limit on number of msg's to check? Do fileno thing to make it time based?
+# Stop program until payload comp msg received and camera is enabled, abort attempt if 5 failed msg's 
 start_calib_cam = False
-while start_calib_cam == False:
+
+CALIB_MSG_ATTEMPTS = 0
+while start_calib_cam == False and CALIB_MSG_ATTEMPTS < MAX_CALIB_MSG_ATTEMPTS:
     msg = lcm_h.wait_for_payload_comp_msg()
     start_calib_cam = msg.cam_enabled
+    CALIB_MSG_ATTEMPTS += 1
+# Abort experiment if still false
+# if start_calib_cam == False:
+#     sys.exit(0) 
 
 
 ## PREPARE CAMERA
 # Read parameters in from file
 args = h.prep_camera_params()
 
-
 ## OPEN AND CALIBRATE CAMERA 
 CALIB_FLAG = False
 CALIB_ATTEMPTS = 0
 
+# TODO DO CAMER CALIBRATION LIVE
 while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     # # Take 2s video and save to calibration folder
     # h.save_calib_video(args)
@@ -108,10 +116,8 @@ print("Camera calibration complete\n")
 
 
 # # SET/WAIT
-# TODO check with integration
-# Tell payload computer camera is calibrated
-# TODO change to set flag based on is calibration successful or not
-lcm_h.publish_cam_msg(cam_calib_complete = True)
+# Tell payload computer camera is calibration status
+lcm_h.publish_cam_msg(cam_calib_complete = CALIB_FLAG)
 
 # Wait for payload computer confirmation to start experiment
 start_exp = False
@@ -120,7 +126,10 @@ while start_exp == False:
     start_exp = msg.exp_enabled
 
 
+
 ## RECORD EXPERIMENT 
+# TODO change FPS and do live pose estimation
+EXP_FLAG = True
 # Take video with baseline images/frames
 print("Starting experiment")
 h.save_exp_video(args)
@@ -136,4 +145,4 @@ h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS)
 
 ## FINISH
 # Tell payload computer experiment is finished
-lcm_h.publish_cam_msg(exp_complete = True)
+lcm_h.publish_cam_msg(exp_complete = EXP_FLAG)
