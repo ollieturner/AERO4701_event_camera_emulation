@@ -3,11 +3,11 @@ from exlcm import payload_comp_msg_t, cam_msg_t
 
 ## PUBLISH FROM PAYLOAD COMP
 # Create a message, fill in data fields and publish
-def publish_payload_comp_msg():
+def publish_payload_comp_msg(cam_enabled = False, exp_enabled = False):
     # Define msg
     msg = payload_comp_msg_t()
-    msg.cam_enabled = True
-    msg.exp_enabled = True
+    msg.cam_enabled = cam_enabled
+    msg.exp_enabled = exp_enabled
 
     # Intialise LCM
     lc = lcm.LCM()
@@ -16,11 +16,6 @@ def publish_payload_comp_msg():
     lc.publish("PAYLOAD_CAM", msg.encode())
 
     print("Message published")
-
-# Publish msg
-publish_payload_comp_msg()
-
-
 
 
 ## RECEIVE FROM CAM
@@ -32,6 +27,7 @@ def wait_for_cam_msg():
     def payload_comp_handler(channel, data):
         received["msg"] = cam_msg_t.decode(data)
         print("Received message on channel \"%s\"" % channel)
+        print("   cam_calib_complete     = %s" % str(received["msg"].cam_calib_complete))       
         print("   exp_complete     = %s" % str(received["msg"].exp_complete))
         print("")
 
@@ -46,11 +42,18 @@ def wait_for_cam_msg():
 
     return received["msg"]
 
-# Stop program untill cam msg received
-msg = wait_for_cam_msg()
 
-# Print out msg
-print("Continue program")
-print(msg.exp_complete)
-print("\n")
 
+#################################################################
+
+# Publish camera calibration to start 
+publish_payload_comp_msg(cam_enabled = True)
+
+# Receive confirmation that camera calibration is complete
+wait_for_cam_msg()
+
+# Publish to start experiment
+publish_payload_comp_msg(exp_enabled = True)
+
+# Receive confirmation that experiment is complete
+wait_for_cam_msg()

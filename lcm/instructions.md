@@ -1,14 +1,15 @@
 generate message with: lcm-gen -p payload_msg_t.lcm
 
 
-in one terminal: python3 payload_comp.py
+in terminal: python3 cam.py (waits first, start here)
+
+in terminal: python3 payload_comp.py
 
 
-in other terminal: python3 cam.py
 
 
 to do:
 
-* automate both files?
+* automate running both files? - save for with lincoln
 
 
