@@ -2,21 +2,20 @@
 # .\venv\Scripts\Activate.ps1
 # source venv/bin/activate
 
-# TODO test event data saving and running in linux 
-# TODO run full fresh test
-# TODO check against tests
-
 # TODO check flags/calibration process with Lincoln 
 # TODO Prepare raspberry pi camera 3 version
+# - change cam params/setup
+# - add focus
+# - add debug mode (if statement over whole thing)
 
 
 ## LIBRARIES
 # Import libraries
-import numpy as np
+# import numpy as np
 import cv2 as cv
 import glob
-import os
-import shutil
+# import os
+# import shutil
 import camera_helper as h
 
 # Logging message
