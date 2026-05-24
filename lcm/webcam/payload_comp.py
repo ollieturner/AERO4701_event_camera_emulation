@@ -50,10 +50,12 @@ def wait_for_cam_msg():
 publish_payload_comp_msg(cam_enabled = True)
 
 # Receive confirmation that camera calibration is complete
+# TODO add abort functionality and timer into computer. restart node if fails?
 wait_for_cam_msg()
 
 # Publish to start experiment
 publish_payload_comp_msg(exp_enabled = True)
 
 # Receive confirmation that experiment is complete
+# TODO add checks in payload comp for exp complete status
 wait_for_cam_msg()

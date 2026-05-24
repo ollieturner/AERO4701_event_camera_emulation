@@ -33,10 +33,18 @@ import sys
 # Logging message
 print("Starting camera program...")
 
+
+## WAIT FOR START
+# Stop program until payload comp msg received and camera is enabled
+start_calib_cam = False
+while start_calib_cam == False:
+    msg = lcm_h.wait_for_payload_comp_msg()
+    start_calib_cam = msg.cam_enabled
+
+
 ## SETUP 
 # Setup directories
 output_dir, calib_folder, baseline_folder, baseline_pose_folder = h.setup_directories()
-MAX_CALIB_MSG_ATTEMPTS = 3
 
 ## TODO: CHANGE TO NEW CHESSBOARD LAYOUT
 # Calibration parameters 
@@ -50,24 +58,9 @@ objpoints_3boards = h.get_cboard_gt()
 ROIS = h.define_rois()
 # h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
-
-## WAIT FOR START
-# Stop program until payload comp msg received and camera is enabled, abort attempt if 5 failed msg's 
-start_calib_cam = False
-
-CALIB_MSG_ATTEMPTS = 0
-while start_calib_cam == False and CALIB_MSG_ATTEMPTS < MAX_CALIB_MSG_ATTEMPTS:
-    msg = lcm_h.wait_for_payload_comp_msg()
-    start_calib_cam = msg.cam_enabled
-    CALIB_MSG_ATTEMPTS += 1
-# Abort experiment if still false
-# if start_calib_cam == False:
-#     sys.exit(0) 
-
-
-## PREPARE CAMERA
-# Read parameters in from file
+# Read camera parameters in from file
 args = h.prep_camera_params()
+
 
 ## OPEN AND CALIBRATE CAMERA 
 CALIB_FLAG = False
@@ -97,7 +90,7 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
         objpoints, imgpoints, img_size, None, None
     )
 
-    # TODO extra: only accept below a max reprojection error (e.g. ret below 2)
+    # TODO extra: only accept below a max reprojection error (e.g. ret below 2)?
 
     # Logging message
     print("Camera matrix:\n", mtx)
@@ -115,8 +108,8 @@ print("Camera calibration complete\n")
 # h.check_repoj_error(objpoints, rvecs, tvecs, mtx, dist, imgpoints)
 
 
-# # SET/WAIT
-# Tell payload computer camera is calibration status
+# # PAYLOAD COMP COMMS
+# Tell payload computer camera calibration status
 lcm_h.publish_cam_msg(cam_calib_complete = CALIB_FLAG)
 
 # Wait for payload computer confirmation to start experiment
@@ -126,9 +119,8 @@ while start_exp == False:
     start_exp = msg.exp_enabled
 
 
-
 ## RECORD EXPERIMENT 
-# TODO change FPS and do live pose estimation
+# TODO change FPS and do live pose estimation and proper exp status (return from func)
 EXP_FLAG = True
 # Take video with baseline images/frames
 print("Starting experiment")
@@ -139,7 +131,7 @@ print("Experiment recording complete")
 ## BASELINE DATA PROCESSING
 print("Processing baseline frames")
 
-# Cycle through images in baseline/, estimate poses, save to file then delete images 
+# Cycle through images in baseline, estimate poses, save to file then delete images 
 h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS)
 
 
