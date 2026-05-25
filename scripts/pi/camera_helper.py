@@ -53,8 +53,8 @@ def define_rois(width=640, height=480, scale=0.38):
     cy = height // 2
 
     # offsets for triangular layout
-    dx = int(width * 0.16)
-    dy = int(height * 0.12)
+    dx = int(width * 0.18)
+    dy = int(height * 0.16)
 
     top_extra = int(height * 0.1)   # extra upward movement
 
@@ -340,7 +340,7 @@ def prep_pi_cam_params(camera_file="camera_settings/pi_camera_settings.txt"):
     # Convert numeric fields
     params["width"]       = int(params.get("width", 640))
     params["height"]      = int(params.get("height", 480))
-    params["fps"]         = float(params.get("fps", 50.0))
+    params["fps"]         = float(params.get("fps", 5.0 )) # 50.0))
     params["threshold"]   = float(params.get("threshold", 30.0))
     params["warmup"]      = float(params.get("warmup", 1.0))
     params["grayscale"]   = params.get("grayscale", "false").lower() == "true"
@@ -486,15 +486,63 @@ def save_calib_video_picam(picam2_, calib_time=1.0, calib_folder="outputs/calibr
 
 
 
-def save_exp_video(picam2_, exp_time=5.0, WINDOW_SIZE = 10, baseline_folder="outputs/baseline"):
+def save_calib_video_picam_widget(picam2_, calib_time=1.0, calib_folder="outputs/calibration"):
+
+    picam2_.start()
+
+    frames = []
+    start_time = time.time()
+
+    try:
+        while time.time() - start_time < calib_time:
+
+            frame = picam2_.capture_array("main")
+            if frame is None:
+                continue
+
+            # --- LIVE DISPLAY WINDOW ---
+            cv.imshow("Calibration Camera", frame)
+
+            # --- STORE FRAME ---
+            frames.append(frame.copy())
+
+            # allow OpenCV UI to update + quit key
+            key = cv.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("[INFO] Early exit triggered")
+                break
+
+            # small delay to reduce CPU load (optional)
+            time.sleep(0.01)
+
+    finally:
+        # clean shutdown of window + camera
+        cv.destroyAllWindows()
+        picam2_.stop()
+
+    # reset calibration folder
+    shutil.rmtree(calib_folder, ignore_errors=True)
+    os.makedirs(calib_folder, exist_ok=True)
+
+    # save frames
+    for i, frame in enumerate(frames):
+        cv.imwrite(f"{calib_folder}/frame_{i:04d}.jpeg", frame)
+
+    print(f"[INFO] Saved {len(frames)} calibration frames to {calib_folder}")
+
+    return picam2_
+
+
+
+def save_exp_video(picam2_, exp_time=20.0, WINDOW_SIZE = 2, baseline_folder="outputs/baseline"):
 
     # Setup output folders
-    # TODO check if needed here?
+    # TODO could remove
     shutil.rmtree(baseline_folder, ignore_errors=True)
     os.makedirs(baseline_folder, exist_ok=True)
-    event_frame_dir = "event_data/frames"
-    event_hist_dir = "event_data/histograms"
-    shutil.rmtree("event_data", ignore_errors=True)
+    event_frame_dir = "outputs/event_data/frames"
+    event_hist_dir = "outputs/event_data/histograms"
+    shutil.rmtree("outputs/event_data", ignore_errors=True)
     os.makedirs(event_frame_dir, exist_ok=True)
     os.makedirs(event_hist_dir, exist_ok=True)
 

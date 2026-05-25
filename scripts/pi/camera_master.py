@@ -2,16 +2,6 @@
 # .\venv\Scripts\Activate.ps1
 # source venv/bin/activate
 
-# TODO test event data saving and running in linux 
-# TODO run full fresh test
-# TODO check against tests
-
-# TODO check flags/calibration process with Lincoln 
-# TODO Prepare raspberry pi camera 3 version
-
-# TODO Add debug mode 
-# TODO change fps, process images on go don't save to file - have two different versions
-# TODO initialise messages to LCM/variables as false? don't need intialising? 
 
 
 ## LIBRARIES
@@ -40,41 +30,50 @@ objpoints_3boards = h.get_cboard_gt()
 
 # Define ROIS of chessboards for calibration
 ROIS = h.define_rois()
-h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
+# h.test_draw_rois(image_path="scripts/pi/test_to_calib_roi.jpg", ROIS=ROIS)
 
 
 
-## WAIT FOR START
-# TODO threading? check with others for integration
-# define callback and make it sit in try, then only move on once message received
-# can use fileno for no blocking 
+# ~ ## WAIT FOR START
+# ~ # TODO threading? check with others for integration
+# ~ # define callback and make it sit in try, then only move on once message received
+# ~ # can use fileno for no blocking 
 
 
-## PREPARE CAMERA
-# Read parameters in from file
-# args = h.prep_camera_params()
-picam2_ = None
-params = h.prep_pi_cam_params()
+# ~ ## PREPARE CAMERA
+# ~ # Read parameters in from file
+# ~ # args = h.prep_camera_params()
+# ~ # picam2_ = None
+# ~ # params = h.prep_pi_cam_params()
 
 
 ## OPEN AND CALIBRATE CAMERA 
 CALIB_FLAG = False
 CALIB_ATTEMPTS = 0
+picam2_ = None
 
 while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
+    print("Starting calibration...\n")
+    # Read parameters in from file
+    params = h.prep_pi_cam_params()
+    
     # Open camera and set focus
+    # TODO might need to make it focus at mid range not closest point?
     picam2_ = h.open_picam(params, picam2_)
 
-    # # Take 2s video and save to calibration folder
-    # h.save_calib_video(args)
-
+    # Take short video and save to calibration folder
+    # h.save_calib_video_picam(picam2_)
+    # h.save_calib_video_picam_widget(picam2_, calib_time = 20.0)
+    
     # Load images
     images = glob.glob(f"{calib_folder}/*.jpeg")
     if len(images) < 5:
-        print("Not enough frames, retrying...")
+        print("Not enough frames, retrying...\n")
         CALIB_ATTEMPTS += 1
         if picam2_ is not None:
             picam2_.stop()
+            picam2_.close()
+            picam2_ = None
         continue
     
     # Detect chessboards
@@ -84,6 +83,8 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
         CALIB_ATTEMPTS += 1
         if picam2_ is not None:
             picam2_.stop()
+            picam2_.close()
+            picam2_ = None
         continue
 
     # Calibrate camera
@@ -97,7 +98,7 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     print("Camera matrix:\n", mtx)
 
     # Cleanup (remove) calibration folder
-    # TODO uncomment this later
+    # Can uncomment this later in final version to save on space
     # shutil.rmtree(calib_folder, ignore_errors=True)
 
     CALIB_FLAG = True
@@ -117,7 +118,7 @@ print("Camera calibration complete\n")
 # RECORD EXPERIMENT 
 # Take video with baseline images/frames
 print("Starting experiment")
-h.save_exp_video(params)
+h.save_exp_video(picam2_)
 print("Experiment recording complete")
 
 

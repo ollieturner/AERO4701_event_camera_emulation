@@ -2,7 +2,7 @@
 
 width       = 640
 height      = 480
-fps         = 50.0
+fps         = 5.0
 threshold   = 30.0
 warmup      = 1.0
 grayscale   = false
