@@ -2,20 +2,25 @@
 # .\venv\Scripts\Activate.ps1
 # source venv/bin/activate
 
+# TODO test event data saving and running in linux 
+# TODO run full fresh test
+# TODO check against tests
+
 # TODO check flags/calibration process with Lincoln 
 # TODO Prepare raspberry pi camera 3 version
-# - change cam params/setup
-# - add focus
-# - add debug mode (if statement over whole thing)
+
+# TODO Add debug mode 
+# TODO change fps, process images on go don't save to file - have two different versions
+# TODO initialise messages to LCM/variables as false? don't need intialising? 
 
 
 ## LIBRARIES
 # Import libraries
-# import numpy as np
+import numpy as np
 import cv2 as cv
 import glob
-# import os
-# import shutil
+import os
+import shutil
 import camera_helper as h
 
 # Logging message
@@ -41,11 +46,15 @@ h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
 ## WAIT FOR START
 # TODO threading? check with others for integration
+# define callback and make it sit in try, then only move on once message received
+# can use fileno for no blocking 
 
 
 ## PREPARE CAMERA
 # Read parameters in from file
-args = h.prep_camera_params()
+# args = h.prep_camera_params()
+picam2_ = None
+params = h.prep_pi_cam_params()
 
 
 ## OPEN AND CALIBRATE CAMERA 
@@ -53,6 +62,9 @@ CALIB_FLAG = False
 CALIB_ATTEMPTS = 0
 
 while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
+    # Open camera and set focus
+    picam2_ = h.open_picam(params, picam2_)
+
     # # Take 2s video and save to calibration folder
     # h.save_calib_video(args)
 
@@ -61,6 +73,8 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     if len(images) < 5:
         print("Not enough frames, retrying...")
         CALIB_ATTEMPTS += 1
+        if picam2_ is not None:
+            picam2_.stop()
         continue
     
     # Detect chessboards
@@ -68,6 +82,8 @@ while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     if len(objpoints) < 3:
         print("Not enough valid detections, retrying...")
         CALIB_ATTEMPTS += 1
+        if picam2_ is not None:
+            picam2_.stop()
         continue
 
     # Calibrate camera
@@ -101,7 +117,7 @@ print("Camera calibration complete\n")
 # RECORD EXPERIMENT 
 # Take video with baseline images/frames
 print("Starting experiment")
-h.save_exp_video(args)
+h.save_exp_video(params)
 print("Experiment recording complete")
 
 

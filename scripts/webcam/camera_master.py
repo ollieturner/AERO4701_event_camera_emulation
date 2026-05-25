@@ -16,11 +16,11 @@
 
 ## LIBRARIES
 # Import libraries
-import numpy as np
+# import numpy as np
 import cv2 as cv
 import glob
-import os
-import shutil
+# import os
+# import shutil
 import camera_helper as h
 
 # Logging message
@@ -52,7 +52,9 @@ h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
 ## PREPARE CAMERA
 # Read parameters in from file
-args = h.prep_camera_params()
+args = h.prep_webcam_params()
+# args = h.prep_pi_cam_params()
+
 
 
 ## OPEN AND CALIBRATE CAMERA 
@@ -61,7 +63,7 @@ CALIB_ATTEMPTS = 0
 
 while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
     # # Take 2s video and save to calibration folder
-    # h.save_calib_video(args)
+    # h.save_calib_video_webcam(args)
 
     # Load images
     images = glob.glob(f"{calib_folder}/*.jpeg")

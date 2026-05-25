@@ -7,6 +7,11 @@ import argparse
 import sys
 import glob
 
+from picamera2 import Picamera2
+from libcamera import controls
+from event_camera_emulation.emulator import EventCameraEmulator
+
+
 def setup_directories():
     output_dir = "outputs"
     os.makedirs(output_dir, exist_ok=True)
@@ -298,8 +303,7 @@ def check_repoj_error(objpoints, rvecs, tvecs, mtx, dist, imgpoints):
 
 #     return objpoints, imgpoints, img_size
 
-# TODO change for Pi
-def prep_camera_params(camera_file = "camera_settings/camera_settings.txt"):
+def prep_webcam_params(camera_file = "camera_settings/camera_settings.txt"):
     params = {}
 
     with open(camera_file, "r") as f:
@@ -319,8 +323,276 @@ def prep_camera_params(camera_file = "camera_settings/camera_settings.txt"):
     return params
 
 
+def prep_pi_cam_params(camera_file="camera_settings/pi_camera_settings.txt"):
+    params = {}
+
+    with open(camera_file, "r") as f:
+        for line in f:
+            line = line.strip()
+
+            # Skip empty lines and comments
+            if not line or line.startswith("#"):
+                continue
+
+            key, value = line.split("=", 1)
+            params[key.strip()] = value.strip()
+
+    # Convert numeric fields
+    params["width"]       = int(params.get("width", 640))
+    params["height"]      = int(params.get("height", 480))
+    params["fps"]         = float(params.get("fps", 50.0))
+    params["threshold"]   = float(params.get("threshold", 30.0))
+    params["warmup"]      = float(params.get("warmup", 1.0))
+    params["grayscale"]   = params.get("grayscale", "false").lower() == "true"
+
+    # Optional overrides - remain None if not set in file
+    exposure_us = params.get("exposure_us", "").strip()
+    params["exposure_us"] = int(exposure_us) if exposure_us else None
+
+    gain = params.get("gain", "").strip()
+    params["gain"] = float(gain) if gain else None
+
+    return params
+
+
+def get_valid_frame(camera):
+    frame = camera.capture_array("main")
+    if frame is None or frame.size == 0:
+        return None
+
+    # Ensure 3-channel BGR
+    if len(frame.shape) != 3:
+        return None
+
+    if frame.shape[2] == 4:
+        frame = cv.cvtColor(frame, cv.COLOR_BGRA2BGR)
+    elif frame.shape[2] != 3:
+        return None
+
+    return frame
+
+
+# Open pi camera 3 and set autofocus 
+def open_picam(params, picam2_):
+    frame_us = int(1_000_000 / params["fps"])
+
+    try:
+        picam2_ = Picamera2()
+
+        config = picam2_.create_video_configuration(
+            main={"format": "BGR888", "size": (params["width"], params["height"])},
+            controls={"FrameDurationLimits": (frame_us, frame_us)}
+        )
+        picam2_.configure(config)
+        picam2_.start()
+
+        # Let auto algorithms settle before focusing
+        time.sleep(params["warmup"])
+
+        # Try autofocus once, then lock the focus position
+        try:
+            picam2_.set_controls({"AfMode": controls.AfModeEnum.Auto})
+            success = picam2_.autofocus_cycle()
+            meta = picam2_.capture_metadata()
+            lens_pos = meta.get("LensPosition", None)
+            if success and lens_pos is not None:
+                picam2_.set_controls({
+                    "AfMode": controls.AfModeEnum.Manual,
+                    "LensPosition": lens_pos
+                })
+        except Exception:
+            print(f'[open_picam_save_calib] [ERROR] Could not focus Raspberry Pi camera: {exc}')
+            sys.exit(1)
+
+        # Read settled metadata and lock camera state
+        meta = picam2_.capture_metadata()
+        settled_exposure = int(meta.get("ExposureTime", min(5000, frame_us // 2)))
+        settled_gain = float(meta.get("AnalogueGain", 1.0))
+        colour_gains = meta.get("ColourGains", None)
+
+        # Use exposure and gain from camera focus, or override if manual provided
+        if params["exposure_us"] is not None:
+            settled_exposure = params["exposure_us"]
+        else:
+            settled_exposure = min(settled_exposure, max(1000, int(0.6 * frame_us)))
+
+        if params["gain"] is not None:
+            settled_gain = params["gain"]
+
+        lock_controls = {
+            "AeEnable": False,
+            "AwbEnable": False,
+            "ExposureTime": settled_exposure,
+            "AnalogueGain": settled_gain,
+            "FrameDurationLimits": (frame_us, frame_us),
+        }
+
+        if colour_gains is not None:
+            lock_controls["ColourGains"] = colour_gains
+
+        picam2_.set_controls(lock_controls)
+
+        # Give time to settle
+        time.sleep(0.2)
+
+        # Test frame from camera
+        previous_image = get_valid_frame(picam2_)
+        if previous_image is None:
+            print('[stream_camera_events] [ERROR] No valid initial frame returned.')
+            sys.exit(1)
+
+        if params["grayscale"]:
+            previous_image = cv.cvtColor(previous_image, cv.COLOR_BGR2GRAY)
+            previous_image = cv.cvtColor(previous_image, cv.COLOR_GRAY2BGR)
+
+        # Log status
+        print(f'[open_picam_save_calib] [INFO] FPS: {params["fps"]:.1f}, frame time: {frame_us} us')
+        print(f'[open_picam_save_calib] [INFO] Locked exposure: {settled_exposure} us')
+        print(f'[open_picam_save_calib] [INFO] Locked gain: {settled_gain:.3f}')
+
+        return picam2_
+
+    except Exception as exc:
+        print(f'[open_picam_save_calib] [ERROR] Could not access Raspberry Pi camera: {exc}')
+        sys.exit(1)
+
+
+# Save calibration video with pi camera 3
+def save_calib_video_picam(picam2_, calib_time=1.0, calib_folder="outputs/calibration"):
+    # Capture calibration frames
+    frames = []
+    start_time = time.time()
+    while time.time() - start_time < calib_time:
+        frame = picam2_.capture_array("main")
+        if frame is None:
+            continue
+        frames.append(frame.copy())
+
+    # TODO remove this?
+    # Make calibration folder
+    shutil.rmtree(calib_folder, ignore_errors=True)
+    os.makedirs(calib_folder, exist_ok=True)
+
+    # Save frames to calibration folder
+    for i, frame in enumerate(frames):
+        # if params.get("grayscale"):
+        #     frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        #     frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
+        cv.imwrite(f"{calib_folder}/frame_{i:04d}.jpeg", frame)
+
+    print(f'[open_picam_save_calib] [INFO] Saved {len(frames)} calibration frames to {calib_folder}')
+
+    return picam2_
+
+
+
+def save_exp_video(picam2_, exp_time=5.0, WINDOW_SIZE = 10, baseline_folder="outputs/baseline"):
+
+    # Setup output folders
+    # TODO check if needed here?
+    shutil.rmtree(baseline_folder, ignore_errors=True)
+    os.makedirs(baseline_folder, exist_ok=True)
+    event_frame_dir = "event_data/frames"
+    event_hist_dir = "event_data/histograms"
+    shutil.rmtree("event_data", ignore_errors=True)
+    os.makedirs(event_frame_dir, exist_ok=True)
+    os.makedirs(event_hist_dir, exist_ok=True)
+
+    # Initialise event camera emulator
+    e_camera_emulator = EventCameraEmulator()
+
+    frames = []
+    frame_idx = 0
+    start_time = time.time()
+
+    # Read first frame
+    frame = picam2_.capture_array("main")
+    if frame is None:
+        print("[save_exp_video] [INFO] Could not read first frame")
+        sys.exit()
+    prev_frame = frame
+
+    event_hist = None
+
+    # Record data for experiment time
+    while time.time() - start_time < exp_time:
+        # Read frame
+        frame = picam2_.capture_array("main")
+        if frame is None:
+            continue
+        
+        # Add frame
+        frames.append(frame)
+
+        # Emulate event camera
+        event_image = e_camera_emulator.get_events_image_rgb(
+            frame,
+            prev_frame,
+            30,
+            record_off_events=True,
+            register_off_events_as_on=False
+        )
+
+        visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
+        prev_frame = frame
+
+        # Save event frame (TODO for debugging)
+        cv.imwrite(
+            os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
+            visual_event_image
+        )
+
+        # Add to spatial histogram
+        if event_image.ndim == 3:
+            gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
+        else:
+            gray_event = event_image
+
+        gray_event = gray_event.astype(np.float32)
+
+        if event_hist is None:
+            event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+        event_hist += np.abs(gray_event)
+
+        # Save event spatial histogram after accumulation
+        if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+            # Save raw histogram data
+            raw_path = os.path.join(event_hist_dir, f"event_hist_raw_{frame_idx:05d}.npy")
+            np.save(raw_path, event_hist)
+
+            # Save normalised visualisation of histogram data
+            hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX)
+            hist_vis = hist_vis.astype(np.uint8)
+            vis_path = os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png")
+            cv.imwrite(vis_path, hist_vis)
+
+            # Reset window
+            event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+        frame_idx += 1
+
+    if picam2_ is not None:
+        picam2_.stop()
+
+    # Save RGB frames for baseline
+    for i, frame in enumerate(frames):
+        cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
+    
+
+
+
+
+
+
+
+
+###############################################
+
+
+
 # TODO could make timing better
-def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/calibration"):
+def save_calib_video_webcam(args, calib_time = 1.0, calib_folder = "outputs/calibration"):
     # Take a 2 second video and save frames - use VideoCapture/imwrite for high quality
     # try:
     #     camera_device = cv.VideoCapture(int(args.video_device))
@@ -356,42 +628,7 @@ def save_calib_video(args, calib_time = 1.0, calib_folder = "outputs/calibration
         cv.imwrite(f"{calib_folder}/frame_{i:04d}.jpeg", frame)
 
 
-# # Take a experiment video and save frames
-# def save_exp_video(args, exp_time = 5.0, baseline_folder = "outputs/baseline"):
-#     # Use VideoCapture/imwrite for high quality
-#     try:
-#         camera_device = cv.VideoCapture(int(args.video_device))
-#     except ValueError:
-#         camera_device = cv.VideoCapture(args.video_device)
-
-#     if not camera_device.isOpened():
-#         print('Could not access camera')
-#         sys.exit()
-
-#     frames = []
-#     start_time = time.time()
-
-#     # Run for experiment time and append every frame
-#     while time.time() - start_time < exp_time:
-#         ret, frame = camera_device.read()
-#         if not ret:
-#             continue
-
-#         frames.append(frame)
-
-#     camera_device.release()
-
-#     # Save video to calibration folder TODO check this
-#     shutil.rmtree(baseline_folder, ignore_errors=True)
-#     os.makedirs(baseline_folder, exist_ok=True)
-
-#     for i, frame in enumerate(frames):
-#         cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
-
-
-
-
-def save_exp_video(args, exp_time=5.0, WINDOW_SIZE = 10, baseline_folder="outputs/baseline"):
+def save_exp_video_webcam(args, exp_time=5.0, WINDOW_SIZE = 10, baseline_folder="outputs/baseline"):
 
     import cv2 as cv
     import numpy as np
