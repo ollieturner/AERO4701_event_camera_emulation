@@ -8,6 +8,9 @@ in terminal: python3 payload_comp.py
 
 python3 lcm/webcam/camera_master.py
 
+for pi:
+- start camera first
+
 
 
 to do:
