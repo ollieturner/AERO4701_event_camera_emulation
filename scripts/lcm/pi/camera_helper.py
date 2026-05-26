@@ -34,15 +34,6 @@ def setup_calib_parameters():
     
     return CHESSBOARD, MAX_BOARDS, SQUARE_SIZE, L, MAX_CALIB_ATTEMPTS
 
-# def define_rois():
-#     ROIS = [
-#         (0, 0, 640, 360),     # board 1
-#         (640, 0, 1280, 360),  # board 2
-#         (320, 360, 960, 720)  # board 3
-#     ]
-
-#     return ROIS
-
 # Define ROIS centred in the image
 # Scale controls ROI size relative to image size
 def define_rois(width=640, height=480, scale=0.38):
@@ -75,7 +66,6 @@ def define_rois(width=640, height=480, scale=0.38):
     return ROIS
 
 # Test function to draw on ROIS onto image for validation
-# TODO change to open camera
 def test_draw_rois(image_path, ROIS, output_dir="outputs", name="roi_debug.png"): 
 
     img = cv.imread(image_path)
@@ -209,21 +199,10 @@ def detect_cboard_calib(images, ROIS, CHESSBOARD=(5,3), SQUARE_SIZE=0.00225):
             imgpoints[board_id].append(corners)
 
             # Draw corners onto debug image
-            cv.drawChessboardCorners(
-                debug_img,
-                CHESSBOARD,
-                corners2,
-                ret
-            )
+            cv.drawChessboardCorners(debug_img, CHESSBOARD, corners2, ret)
 
             # Draw ROI rectangle
-            cv.rectangle(
-                debug_img,
-                (x1, y1),
-                (x2, y2),
-                (0, 255, 0),
-                2
-            )
+            cv.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
         # Save annotated image
         save_path = f"{debug_folder}/calib_{save_idx:04d}.png"
@@ -243,84 +222,6 @@ def detect_cboard_calib(images, ROIS, CHESSBOARD=(5,3), SQUARE_SIZE=0.00225):
             img_flat.append(imgpoints[b][i])
 
     return obj_flat, img_flat, img_size
-
-
-def check_repoj_error(objpoints, rvecs, tvecs, mtx, dist, imgpoints):
-    
-    # Calculate mean reprojection error
-
-    total_error = 0
-
-    for i in range(len(objpoints)):
-
-        # Project 3D object points back into image
-        imgpoints2, _ = cv.projectPoints(
-            objpoints[i],
-            rvecs[i],
-            tvecs[i],
-            mtx,
-            dist
-        )
-
-        # Compute L2 reprojection error
-        error = cv.norm(
-            imgpoints[i],
-            imgpoints2,
-            cv.NORM_L2
-        ) / len(imgpoints2)
-
-        total_error += error
-
-    mean_error = total_error / len(objpoints)
-
-    print(f"Mean reprojection error: {mean_error:.6f} pixels")
-
-
-# No ROI consideration
-# def detect_cboard_calib(images, CHESSBOARD = (5, 3), SQUARE_SIZE = 0.00225):
-#     print("Calibrating camera...")
-
-#     objpoints = []
-#     imgpoints = []
-#     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    
-#     for fname in images:
-#         img = cv.imread(fname)
-#         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-#         # TODO replace with findChessboardCornersSB
-#         ret, corners = cv.findChessboardCorners(gray, CHESSBOARD, None)
-
-#         if ret:
-#             objp_calib = np.zeros((CHESSBOARD[0]*CHESSBOARD[1], 3), np.float32)
-#             objp_calib[:, :2] = np.mgrid[0:CHESSBOARD[0], 0:CHESSBOARD[1]].T.reshape(-1, 2) * SQUARE_SIZE
-#             objpoints.append(objp_calib)
-#             # TODO Reduce from 11, 11?
-#             corners2 = cv.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
-#             imgpoints.append(corners2)
-        
-#     img_size = gray.shape[::-1]
-
-#     return objpoints, imgpoints, img_size
-
-def prep_webcam_params(camera_file = "camera_settings/camera_settings.txt"):
-    params = {}
-
-    with open(camera_file, "r") as f:
-        for line in f:
-            line = line.strip()
-
-            # Skip empty lines and comments
-            if not line or line.startswith("#"):
-                continue
-
-            key, value = line.split("=")
-            params[key.strip()] = value.strip()
-
-    # Convert numeric fields if needed
-    params["video_device"] = int(params.get("video_device", 0))
-
-    return params
 
 
 def prep_pi_cam_params(camera_file="camera_settings/pi_camera_settings.txt"):
@@ -485,9 +386,7 @@ def save_calib_video_picam(picam2_, calib_time=1.0, calib_folder="outputs/calibr
     return picam2_
 
 
-
 def save_calib_video_picam_widget(picam2_, calib_time=1.0, calib_folder="outputs/calibration"):
-
     picam2_.start()
 
     frames = []
@@ -547,14 +446,25 @@ def extract_applied_settings(picam2_):
     if "LensPosition" in metadata:
         saved["LensPosition"] = metadata["LensPosition"]
 
-    # FocusFoM is READ-ONLY metadata — do NOT include, it can't be set as a control
-
     return saved
+
+
+def close_camera(picam2_):
+    try:
+        picam2_.stop()
+    except Exception:
+        pass
+    try:
+        picam2_.close()
+    except Exception:
+        pass
+    picam2_ = None
+    
+    return picam2_
 
 
 def open_picam_for_exp(params, picam2_, saved_cam_settings):
     """Reopen camera for experiment and reapply calibration settings."""
-    from libcamera import controls
     frame_us = int(1_000_000 / params["fps"])
     try:
         picam2_ = Picamera2()
@@ -606,6 +516,7 @@ def open_picam_for_exp(params, picam2_, saved_cam_settings):
     except Exception as exc:
         print(f"[open_picam_for_exp] [ERROR] Could not open camera: {exc}\n")
         sys.exit(1)
+
 
 def save_exp_video_widget(picam2_, exp_time=20.0, WINDOW_SIZE=1, baseline_folder="outputs/baseline"):
     print("Starting experiment")
@@ -787,9 +698,6 @@ def save_exp_video(picam2_, exp_time=20.0, WINDOW_SIZE = 1, baseline_folder="out
 
     
 
-
-
-
 # Cycling through frames, estimate pose then save to file 
 def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3), baseline_folder = "outputs/baseline", pose_folder = "outputs/baseline_pose"):
     print("Processing baseline frames")
@@ -885,165 +793,43 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD = (5, 3
 
 
 
+###################################################################################
 
+def check_repoj_error(objpoints, rvecs, tvecs, mtx, dist, imgpoints):
+    
+    # Calculate mean reprojection error
 
+    total_error = 0
 
+    for i in range(len(objpoints)):
 
-###############################################
-
-
-
-# TODO could make timing better
-def save_calib_video_webcam(args, calib_time = 1.0, calib_folder = "outputs/calibration"):
-    # Take a 2 second video and save frames - use VideoCapture/imwrite for high quality
-    # try:
-    #     camera_device = cv.VideoCapture(int(args.video_device))
-    # except ValueError:
-    #     camera_device = cv.VideoCapture(args.video_device)
-
-    try:
-        camera_device = cv.VideoCapture(int(args["video_device"]))
-    except ValueError:
-        camera_device = cv.VideoCapture(args["video_device"])
-
-    if not camera_device.isOpened():
-        print('Could not access camera')
-        sys.exit()
-
-    frames = []
-    start_time = time.time()
-
-    while time.time() - start_time < calib_time:
-        ret, frame = camera_device.read()
-        if not ret:
-            continue
-
-        frames.append(frame)
-
-    camera_device.release()
-
-    # Save video to calibration folder TODO check this
-    shutil.rmtree(calib_folder, ignore_errors=True)
-    os.makedirs(calib_folder, exist_ok=True)
-
-    for i, frame in enumerate(frames):
-        cv.imwrite(f"{calib_folder}/frame_{i:04d}.jpeg", frame)
-
-
-def save_exp_video_webcam(args, exp_time=5.0, WINDOW_SIZE = 10, baseline_folder="outputs/baseline"):
-
-    import cv2 as cv
-    import numpy as np
-    import os
-    import time
-    import shutil
-
-    from event_camera_emulation.emulator import EventCameraEmulator
-
-    # Setup camera
-    try:
-        camera_device = cv.VideoCapture(int(args["video_device"])) # args.video_device))
-    except ValueError:
-        camera_device = cv.VideoCapture(args["video_device"]) # args.video_device)
-
-    if not camera_device.isOpened():
-        print("Could not access camera")
-        sys.exit()
-
-    # Setup output folders
-    shutil.rmtree(baseline_folder, ignore_errors=True)
-    os.makedirs(baseline_folder, exist_ok=True)
-    event_frame_dir = "event_data/frames"
-    event_hist_dir = "event_data/histograms"
-    shutil.rmtree("event_data", ignore_errors=True)
-    os.makedirs(event_frame_dir, exist_ok=True)
-    os.makedirs(event_hist_dir, exist_ok=True)
-
-    # Initialise event camera emulator
-    e_camera_emulator = EventCameraEmulator()
-
-    frames = []
-    frame_idx = 0
-    start_time = time.time()
-
-    # Check first frame
-    ret, prev_frame = camera_device.read()
-    if not ret:
-        print("Could not read first frame")
-        sys.exit()
-
-    event_hist = None
-
-    # Record data for experiment time
-    while time.time() - start_time < exp_time:
-        # Read frame
-        ret, frame = camera_device.read()
-        if not ret:
-            continue
-        
-        # Add frame
-        frames.append(frame)
-
-        # Emulate event camera
-        event_image = e_camera_emulator.get_events_image_rgb(
-            frame,
-            prev_frame,
-            30,
-            record_off_events=True,
-            register_off_events_as_on=False
+        # Project 3D object points back into image
+        imgpoints2, _ = cv.projectPoints(
+            objpoints[i],
+            rvecs[i],
+            tvecs[i],
+            mtx,
+            dist
         )
 
-        visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
-        prev_frame = frame
+        # Compute L2 reprojection error
+        error = cv.norm(
+            imgpoints[i],
+            imgpoints2,
+            cv.NORM_L2
+        ) / len(imgpoints2)
 
-        # Save event frame (TODO for debugging)
-        cv.imwrite(
-            os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
-            visual_event_image
-        )
+        total_error += error
 
-        # Add to spatial histogram
-        if event_image.ndim == 3:
-            gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
-        else:
-            gray_event = event_image
+    mean_error = total_error / len(objpoints)
 
-        gray_event = gray_event.astype(np.float32)
+    print(f"Mean reprojection error: {mean_error:.6f} pixels")
 
-        if event_hist is None:
-            event_hist = np.zeros_like(gray_event, dtype=np.float32)
+# def define_rois():
+#     ROIS = [
+#         (0, 0, 640, 360),     # board 1
+#         (640, 0, 1280, 360),  # board 2
+#         (320, 360, 960, 720)  # board 3
+#     ]
 
-        event_hist += np.abs(gray_event)
-
-        # Save event spatial histogram after accumulation
-        if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-            # Save raw histogram data
-            raw_path = os.path.join(event_hist_dir, f"event_hist_raw_{frame_idx:05d}.npy")
-            np.save(raw_path, event_hist)
-
-            # Save normalised visualisation of histogram data
-            hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX)
-            hist_vis = hist_vis.astype(np.uint8)
-            vis_path = os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png")
-            cv.imwrite(vis_path, hist_vis)
-
-            # Reset window
-            event_hist = np.zeros_like(gray_event, dtype=np.float32)
-
-        frame_idx += 1
-
-    camera_device.release()
-
-    # Save RGB frames for baseline
-    for i, frame in enumerate(frames):
-        cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
-
-
-
-
-
-
-
-
-
-
+#     return ROIS
