@@ -14,13 +14,13 @@
 ## LIBRARIES
 import cv2 as cv
 import glob
-import scripts.lcm.pi.camera_helper_new as h
-import scripts.lcm.pi.lcm_helper as lcm_h
+import camera_helper_new as h
+import lcm_helper as lcm_h
 
 
 ## FLAGS
 SHOW_CAMERA_FEED    = True   # Display live camera feed widget during capture
-SAVE_DEBUG_IMAGES   = True   # Save calibration_test, baseline_pose annotated images and event data
+SAVE_DEBUG_IMAGES   = False   # Save calibration_test, baseline_pose annotated images and event data
 DELETE_IMAGES       = False  # Delete all saved images (calibration + experiment) after each run
 DEBUG_MODE         = True   # Save a focused frame to outputs/ after autofocus
 
@@ -140,8 +140,8 @@ while True:
         continue
 
     # Run experiment
+    # exp_success = h.save_exp_video(picam2_, display_widget = SHOW_CAMERA_FEED, save_debug_images = SAVE_DEBUG_IMAGES, exp_time=20.0)
     exp_success = h.save_exp_video(picam2_, display_widget = SHOW_CAMERA_FEED, save_debug_images = SAVE_DEBUG_IMAGES, exp_time=20.0)
-    # exp_success = h.save_exp_video_dev(picam2_, display_widget = SHOW_CAMERA_FEED, save_debug_images = SAVE_DEBUG_IMAGES, exp_time=20.0)
 
 
     # Check experiment was ok
@@ -153,8 +153,8 @@ while True:
 
     ## BASELINE DATA PROCESSING
     # Cycle through images in baseline/, estimate poses, save to file
-    h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS, save_debug_images = SAVE_DEBUG_IMAGES)
-    # h.process_baseline_data_dev(objpoints_3boards, mtx, dist, ROIS, save_debug_images=SAVE_DEBUG_IMAGES)
+    # h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS, save_debug_images = SAVE_DEBUG_IMAGES)
+    h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS, save_debug_images=SAVE_DEBUG_IMAGES)
 
 
     ## CLEANUP
