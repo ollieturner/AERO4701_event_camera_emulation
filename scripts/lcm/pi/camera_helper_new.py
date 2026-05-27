@@ -795,80 +795,111 @@ def open_picam_for_exp(params, picam2_, saved_cam_settings):
 #     attitude_file.close()
 
 
+import struct
+
+# New to test: in correct binary format 
+# TODO remove zero padding since every experiment is 150 rows guaranteed
+# TODO fix up quality and code style
+HIST_ROWS      = 150
+POSE_ROWS      = 150
+HIST_ROW_BYTES = 38_400   # 640 × 480 × 1 bit / 8
+POSE_ROW_BYTES = 24       # 6 × float32
+ZERO_HIST      = b"\x00" * HIST_ROW_BYTES
+ZERO_POSE      = struct.pack("<6f", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+
+def _pack_histogram(event_hist: np.ndarray) -> bytes:
+    hist_binary = (event_hist > 0).astype(np.uint8)
+    packed = np.packbits(hist_binary, axis=None)
+    data = packed.tobytes()
+    if len(data) < HIST_ROW_BYTES:
+        data = data + b"\x00" * (HIST_ROW_BYTES - len(data))
+    return data[:HIST_ROW_BYTES]
+
+
+def _pack_pose(x, y, z, roll, pitch, yaw) -> bytes:
+    return struct.pack("<6f", x, y, z, roll, pitch, yaw)
+
+
+def _write_results(results_path, hist_rows, pose_rows):
+    """Write exactly 150 histogram rows then 150 pose rows, zero-padding remainder."""
+    with open(results_path, "wb") as f:
+        for i in range(HIST_ROWS):
+            f.write(hist_rows[i] if i < len(hist_rows) else ZERO_HIST)
+        for i in range(POSE_ROWS):
+            f.write(pose_rows[i] if i < len(pose_rows) else ZERO_POSE)
+
+
+# ---------------------------------------------------------------------------
 # Record experiment video and save frames
-def save_exp_video(picam2_, display_widget=False, save_debug_images=False, exp_time=20.0, WINDOW_SIZE=1):
+# ---------------------------------------------------------------------------
+
+def save_exp_video(picam2_, display_widget=False, save_debug_images=False,
+                   exp_time=20.0, WINDOW_SIZE=1):
     print("Starting experiment")
-    # Setup output folders
+
     baseline_folder = "outputs/baseline"
-    results_dir = "outputs/experiment_results"
+    results_dir     = "outputs/experiment_results"
     shutil.rmtree(baseline_folder, ignore_errors=True)
     shutil.rmtree(results_dir, ignore_errors=True)
     os.makedirs(baseline_folder, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
-    # Debug only
+
     if save_debug_images:
         event_frame_dir = "outputs/event_data/frames"
-        event_hist_dir = "outputs/event_data/histograms"
+        event_hist_dir  = "outputs/event_data/histograms"
         shutil.rmtree("outputs/event_data", ignore_errors=True)
         os.makedirs(event_frame_dir, exist_ok=True)
         os.makedirs(event_hist_dir, exist_ok=True)
-    # Initialise event camera emulator
-    e_camera_emulator = EventCameraEmulator()
-    frames = []
-    frame_idx = 0
-    histograms = []  # Collect all packed histograms in memory
 
-    # Wait up to 10s for first frame
-    timeout = 10.0
+    e_camera_emulator = EventCameraEmulator()
+    frames    = []
+    frame_idx = 0
+    hist_rows = []   # collected packed histogram bytes
+
+    # Wait up to 10 s for first frame
     start_time = time.time()
     frame = None
-    while frame is None and (time.time() - start_time) < timeout:
+    while frame is None and (time.time() - start_time) < 10.0:
         try:
             frame = picam2_.capture_array("main")
         except Exception:
             frame = None
     if frame is None:
-        print("[save_exp_video] [ERROR] Experiment failed: no frame received within 10s")
+        print("[save_exp_video] [ERROR] No frame received within 10 s")
         return None
-    else:
-        prev_frame = frame
-        print("[save_exp_video] [INFO] Read first frame")
+    prev_frame = frame
+    print("[save_exp_video] [INFO] Read first frame")
 
     def process_frame(frame, prev_frame, frame_idx, event_hist):
-        """Shared per-frame logic for both display modes."""
         frames.append(frame)
         event_image = e_camera_emulator.get_events_image_rgb(
             frame, prev_frame, 30,
-            record_off_events=True,
-            register_off_events_as_on=False
+            record_off_events=True, register_off_events_as_on=False
         )
         visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
-
-        gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY) if event_image.ndim == 3 else event_image
-        gray_event = gray_event.astype(np.float32)
+        gray_event = (cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
+                      if event_image.ndim == 3 else event_image).astype(np.float32)
         if event_hist is None:
             event_hist = np.zeros_like(gray_event, dtype=np.float32)
         event_hist += np.abs(gray_event)
 
-        # Accumulate histogram into list
         if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
             hist_idx = frame_idx // WINDOW_SIZE
-            if hist_idx < 150:
-                hist_binary = (event_hist > 0).astype(np.uint8)
-                hist_packed = np.packbits(hist_binary, axis=None)
-                histograms.append((hist_idx, hist_packed))
+            if hist_idx < HIST_ROWS:
+                hist_rows.append(_pack_histogram(event_hist))
 
-        # Debug images
         if save_debug_images:
-            cv.imwrite(os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"), visual_event_image)
+            cv.imwrite(os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
+                       visual_event_image)
             if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-                hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
-                cv.imwrite(os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png"), hist_vis)
+                hist_vis = cv.normalize(event_hist, None, 0, 255,
+                                        cv.NORM_MINMAX).astype(np.uint8)
+                cv.imwrite(os.path.join(event_hist_dir,
+                           f"event_hist_vis_{frame_idx:05d}.png"), hist_vis)
 
-        # Reset histogram window
         if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
             event_hist = np.zeros_like(gray_event, dtype=np.float32)
-
         return event_hist
 
     start_time = time.time()
@@ -888,7 +919,7 @@ def save_exp_video(picam2_, display_widget=False, save_debug_images=False, exp_t
                 prev_frame = frame
                 frame_idx += 1
         except Exception as exc:
-            print(f"[save_exp_video] [ERROR] Widget failed: {exc}\n")
+            print(f"[save_exp_video] [ERROR] Widget failed: {exc}")
             return None
         finally:
             cv.destroyAllWindows()
@@ -904,42 +935,38 @@ def save_exp_video(picam2_, display_widget=False, save_debug_images=False, exp_t
     if picam2_ is not None:
         close_camera(picam2_)
 
-    # Save RGB frames for later pose estimation
-    for i, frame in enumerate(frames):
-        cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
+    for i, f in enumerate(frames):
+        cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", f)
 
-    # Write all histograms into experiment_results.txt
-    results_path = os.path.join(results_dir, "experiment_results.txt")
-    with open(results_path, "w") as f:
-        f.write("=== HISTOGRAMS ===\n")
-        for hist_idx, hist_packed in histograms:
-            f.write(f"hist_{hist_idx:03d}:{','.join(str(v) for v in hist_packed.tolist())}\n")
-        f.write("=== POSE ESTIMATES ===\n")
-        # Pose estimates written later by process_baseline_data()
-
-    print("Experiment recording complete\n")
+    # Write histogram section; pose rows filled in later by process_baseline_data()
+    results_path = os.path.join(results_dir, "experiment_results.bin")
+    _write_results(results_path, hist_rows, [])
+    print(f"Experiment recording complete — {len(hist_rows)} histogram rows written\n")
     return True
 
 
-# Cycling through frames, estimate pose then save to file. Save annotated images if enabled
+# ---------------------------------------------------------------------------
+# Process baseline frames and overwrite final binary with pose data added
+# ---------------------------------------------------------------------------
+
 def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD=(5, 3),
                            baseline_folder="outputs/baseline",
                            pose_folder="outputs/baseline_pose",
                            save_debug_images=False):
     print("Processing baseline frames")
     images = sorted(glob.glob(os.path.join(baseline_folder, "*.jpeg")))
-    print("Found images:", len(images))
+    print(f"Found images: {len(images)}")
+
     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     os.makedirs(pose_folder, exist_ok=True)
 
-    results_path = "outputs/experiment_results/experiment_results.txt"
-    pose_rows = []  # Collect all rows first, then append
+    results_path = "outputs/experiment_results/experiment_results.bin"
+    pose_rows = []
 
     for fname in images:
-        img = cv.imread(fname)
+        img  = cv.imread(fname)
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        base = os.path.basename(fname)
-        name, _ = os.path.splitext(base)
+        base = os.path.splitext(os.path.basename(fname))[0]
 
         for board_id, roi in enumerate(ROIS):
             x1, y1, x2, y2 = roi
@@ -949,33 +976,35 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD=(5, 3),
             ret, corners = cv.findChessboardCorners(working_img, CHESSBOARD, None)
 
             if not ret:
-                pose_rows.append("0,0,0,0,0,0")
+                pose_rows.append(ZERO_POSE)
                 continue
 
             corners = cv.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
-            obj_model = objpoints_3boards[board_id]
-            success, rvec, tvec = cv.solvePnP(obj_model, corners, mtx, dist)
+            success, rvec, tvec = cv.solvePnP(
+                objpoints_3boards[board_id], corners, mtx, dist)
 
             if success:
-                t = tvec.flatten()
-                r = rvec.flatten()
-                pose_rows.append(f"{t[0]:.6f},{t[1]:.6f},{t[2]:.6f},{r[0]:.6f},{r[1]:.6f},{r[2]:.6f}")
+                t, r = tvec.flatten(), rvec.flatten()
+                pose_rows.append(_pack_pose(t[0], t[1], t[2], r[0], r[1], r[2]))
             else:
-                pose_rows.append("0,0,0,0,0,0")
+                pose_rows.append(ZERO_POSE)
 
             if save_debug_images and success:
                 cv.drawChessboardCorners(img, CHESSBOARD, corners, ret)
 
         if save_debug_images:
-            cv.imwrite(os.path.join(pose_folder, f"{name}_multi_pose.png"), img)
+            cv.imwrite(os.path.join(pose_folder, f"{base}_multi_pose.png"), img)
 
-    # Append pose estimates after the histogram section
-    with open(results_path, "a") as f:
-        f.write("x,y,z,roll,pitch,yaw\n")
-        for row in pose_rows:
-            f.write(row + "\n")
+    # Read existing histogram rows back, then rewrite the complete file
+    hist_rows = []
+    with open(results_path, "rb") as f:
+        for _ in range(HIST_ROWS):
+            hist_rows.append(f.read(HIST_ROW_BYTES))
 
-    print("Baseline processing complete\n")
+    _write_results(results_path, hist_rows, pose_rows)
+    print(f"Baseline processing complete — {len(pose_rows)} pose rows written\n")
+
+
 
 
 # Delete experiment images, and debug images if produced
