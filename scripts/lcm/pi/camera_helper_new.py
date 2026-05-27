@@ -497,20 +497,314 @@ def open_picam_for_exp(params, picam2_, saved_cam_settings):
         return None 
 
 
-# Record experiment video and save frames
-def save_exp_video(picam2_, display_widget = False, save_debug_images = False, exp_time=20.0, WINDOW_SIZE=1):
-    print("Starting experiment")
+# # Record experiment video and save frames
+# def save_exp_video(picam2_, display_widget = False, save_debug_images = False, exp_time=20.0, WINDOW_SIZE=1):
+#     print("Starting experiment")
 
+#     # Setup output folders
+#     baseline_folder = "outputs/baseline"
+#     results_dir = "outputs/experiment_results"
+#     hist_dir = os.path.join(results_dir, "histograms")
+#     shutil.rmtree(baseline_folder, ignore_errors=True)
+#     shutil.rmtree(results_dir, ignore_errors=True)
+#     os.makedirs(baseline_folder, exist_ok=True)
+#     os.makedirs(results_dir, exist_ok=True)
+#     os.makedirs(hist_dir, exist_ok=True)
+
+#     # Debug only
+#     if save_debug_images:
+#         event_frame_dir = "outputs/event_data/frames"
+#         event_hist_dir = "outputs/event_data/histograms"
+#         shutil.rmtree("outputs/event_data", ignore_errors=True)
+#         os.makedirs(event_frame_dir, exist_ok=True)
+#         os.makedirs(event_hist_dir, exist_ok=True)
+
+#     # Initialise event camera emulator
+#     e_camera_emulator = EventCameraEmulator()
+
+#     frames = []
+#     frame_idx = 0
+   
+#     # Wait up to 10s for first frame
+#     timeout = 10.0
+#     start_time = time.time()
+#     frame = None
+
+#     # Read in first frame
+#     while frame is None and (time.time() - start_time) < timeout:
+#         try:
+#             frame = picam2_.capture_array("main")
+#         except Exception:
+#             frame = None
+#     if frame is None:
+#         print("[save_exp_video] [ERROR] Experiment failed: no frame received within 10s")
+#         return None   
+#     else:
+#         prev_frame = frame
+#         print("[save_exp_video] [INFO] Read first frame")
+
+#     # Run experiment with or without widget displayed
+#     start_time = time.time()
+#     event_hist = None
+
+#     if display_widget:
+#         try:
+#             # Record data for experiment time
+#             while time.time() - start_time < exp_time:
+#                 frame = picam2_.capture_array("main")
+#                 if frame is None:
+#                     continue
+                
+#                 # Add to widget 
+#                 cv.imshow("Experiment Camera", frame)
+#                 key = cv.waitKey(1) & 0xFF
+#                 if key == ord('q'):
+#                     print("[INFO] Early exit triggered")
+#                     break
+
+#                 frames.append(frame)
+
+#                 # Emulate event camera
+#                 event_image = e_camera_emulator.get_events_image_rgb(
+#                     frame,
+#                     prev_frame,
+#                     30,
+#                     record_off_events=True,
+#                     register_off_events_as_on=False
+#                 )
+
+#                 visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
+#                 prev_frame = frame
+
+#                 # Add to spatial histogram
+#                 if event_image.ndim == 3:
+#                     gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
+#                 else:
+#                     gray_event = event_image
+
+#                 gray_event = gray_event.astype(np.float32)
+
+#                 if event_hist is None:
+#                     event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+#                 event_hist += np.abs(gray_event)
+
+#                 # Save event spatial histogram after accumulation
+#                 if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+#                     # Save in bit format
+#                     hist_idx = frame_idx // WINDOW_SIZE
+#                     if hist_idx < 150:
+#                         # Convert from intensity to occupancy (1 bit)
+#                         hist_binary = (event_hist > 0).astype(np.uint8)
+                                              
+#                         # Convert uint8 to 1 bit 
+#                         hist_packed = np.packbits(hist_binary, axis=None)
+#                         # Save
+#                         hist_path = os.path.join(hist_dir, f"hist_{hist_idx:03d}.npy")
+#                         np.save(hist_path, hist_packed)
+
+#                 # Save event data frames and spatial histogram images if debug enabled
+#                 if save_debug_images:
+#                     # Save event frame
+#                     cv.imwrite(
+#                         os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
+#                         visual_event_image
+#                     )
+
+#                     # Save normalised visualisation of histogram data
+#                     if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+#                         hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX)
+#                         hist_vis = hist_vis.astype(np.uint8)
+#                         vis_path = os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png")
+#                         cv.imwrite(vis_path, hist_vis)
+                
+#                 # Reset histogram window
+#                 if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+#                     event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+#                 frame_idx += 1
+
+#         except Exception as exc:
+#             print(f"[save_exp_video] [ERROR] Widget failed: {exc}\n")
+#             return None 
+
+#         finally:
+#             cv.destroyAllWindows()
+#     else:
+#         # Record data for experiment time
+#         while time.time() - start_time < exp_time:
+#             frame = picam2_.capture_array("main")
+#             if frame is None:
+#                 continue
+
+#             frames.append(frame)
+
+#             # Emulate event camera
+#             event_image = e_camera_emulator.get_events_image_rgb(
+#                 frame,
+#                 prev_frame,
+#                 30,
+#                 record_off_events=True,
+#                 register_off_events_as_on=False
+#             )
+
+#             visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
+#             prev_frame = frame
+
+#             # Add to spatial histogram
+#             if event_image.ndim == 3:
+#                 gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
+#             else:
+#                 gray_event = event_image
+
+#             gray_event = gray_event.astype(np.float32)
+
+#             if event_hist is None:
+#                 event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+#             event_hist += np.abs(gray_event)
+
+#             # Save event spatial histogram after accumulation
+#             if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+#                 # Save in bit format
+#                 hist_idx = frame_idx // WINDOW_SIZE
+#                 if hist_idx < 150:
+#                     # Convert from intensity to occupancy (1 bit)
+#                     hist_binary = (event_hist > 0).astype(np.uint8)
+                                        
+#                     # Convert uint8 to 1 bit 
+#                     hist_packed = np.packbits(hist_binary, axis=None)
+#                     # Save
+#                     hist_path = os.path.join(hist_dir, f"hist_{hist_idx:03d}.npy")
+#                     np.save(hist_path, hist_packed)
+
+#             # Save event data frames and spatial histogram images if debug enabled
+#             if save_debug_images:
+#                 # Save event frame
+#                 cv.imwrite(
+#                     os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
+#                     visual_event_image
+#                 )
+
+#                 # Save normalised visualisation of histogram data
+#                 if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+#                     hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX)
+#                     hist_vis = hist_vis.astype(np.uint8)
+#                     vis_path = os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png")
+#                     cv.imwrite(vis_path, hist_vis)
+            
+#             # Reset histogram window
+#             if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+#                 event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+#             frame_idx += 1
+
+#     if picam2_ is not None:
+#         close_camera(picam2_)
+
+#     # Save RGB frames for later pose estimation
+#     for i, frame in enumerate(frames):
+#         cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
+
+
+#     print("Experiment recording complete\n")
+
+#     return True
+
+
+# # Cycling through frames, estimate pose then save to file. Save annotated images if enabled
+# def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD=(5, 3),
+#                            baseline_folder="outputs/baseline",
+#                            pose_folder="outputs/baseline_pose",
+#                            save_debug_images=False):
+
+#     print("Processing baseline frames")
+
+#     images = sorted(
+#         glob.glob(os.path.join(baseline_folder, "*.jpeg"))
+#     )
+#     print("Found images:", len(images))
+
+#     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+
+#     os.makedirs(pose_folder, exist_ok=True)
+
+#     # Define pose estimate files
+#     results_dir = "outputs/experiment_results"
+#     position_file = open(os.path.join(results_dir, "camera_position.csv"), "w")
+#     attitude_file = open(os.path.join(results_dir, "camera_attitude.csv"), "w")
+#     position_file.write("x,y,z\n")
+#     attitude_file.write("roll,pitch,yaw\n")
+
+#     for fname in images:
+#         img = cv.imread(fname)
+#         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+#         base = os.path.basename(fname)
+#         name, _ = os.path.splitext(base)
+
+#         for board_id, roi in enumerate(ROIS):
+
+#             x1, y1, x2, y2 = roi
+
+#             # Mask out outside ROI
+#             mask = np.zeros_like(gray, dtype=np.uint8)
+#             mask[y1:y2, x1:x2] = 255
+
+#             # Apply mask
+#             working_img = cv.bitwise_and(gray, gray, mask=mask)
+
+#             # Detect chessboard corners
+#             ret, corners = cv.findChessboardCorners(working_img, CHESSBOARD, None)
+
+#             # Skip if not detected
+#             if not ret:
+#                 # Blank out pose estimate to preserve order
+#                 position_file.write("0,0,0\n")
+#                 attitude_file.write("0,0,0\n")
+#                 continue
+
+#             corners = cv.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
+
+#             # Pose estimation
+#             obj_model = objpoints_3boards[board_id]
+#             success, rvec, tvec = cv.solvePnP(obj_model, corners, mtx, dist)
+
+#             # Write out pose estimate
+#             if success:
+#                 r = rvec.flatten()
+#                 t = tvec.flatten()
+
+#                 position_file.write(f"{t[0]:.6f},{t[1]:.6f},{t[2]:.6f}\n")
+#                 attitude_file.write(f"{r[0]:.6f},{r[1]:.6f},{r[2]:.6f}\n")
+
+#             else:
+#                 position_file.write("0,0,0\n")
+#                 attitude_file.write("0,0,0\n")
+
+#             # Draw detected corners onto image for debug output
+#             if save_debug_images and success:
+#                 cv.drawChessboardCorners(img, CHESSBOARD, corners, ret)
+
+#         # Save annotated image only if debug flag is on
+#         if save_debug_images:
+#             output_name = os.path.join(pose_folder, f"{name}_multi_pose.png")
+#             cv.imwrite(output_name, img)
+        
+#     position_file.close()
+#     attitude_file.close()
+
+
+# Record experiment video and save frames
+def save_exp_video(picam2_, display_widget=False, save_debug_images=False, exp_time=20.0, WINDOW_SIZE=1):
+    print("Starting experiment")
     # Setup output folders
     baseline_folder = "outputs/baseline"
     results_dir = "outputs/experiment_results"
-    hist_dir = os.path.join(results_dir, "histograms")
     shutil.rmtree(baseline_folder, ignore_errors=True)
     shutil.rmtree(results_dir, ignore_errors=True)
     os.makedirs(baseline_folder, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
-    os.makedirs(hist_dir, exist_ok=True)
-
     # Debug only
     if save_debug_images:
         event_frame_dir = "outputs/event_data/frames"
@@ -518,19 +812,16 @@ def save_exp_video(picam2_, display_widget = False, save_debug_images = False, e
         shutil.rmtree("outputs/event_data", ignore_errors=True)
         os.makedirs(event_frame_dir, exist_ok=True)
         os.makedirs(event_hist_dir, exist_ok=True)
-
     # Initialise event camera emulator
     e_camera_emulator = EventCameraEmulator()
-
     frames = []
     frame_idx = 0
-   
+    histograms = []  # Collect all packed histograms in memory
+
     # Wait up to 10s for first frame
     timeout = 10.0
     start_time = time.time()
     frame = None
-
-    # Read in first frame
     while frame is None and (time.time() - start_time) < timeout:
         try:
             frame = picam2_.capture_array("main")
@@ -538,165 +829,76 @@ def save_exp_video(picam2_, display_widget = False, save_debug_images = False, e
             frame = None
     if frame is None:
         print("[save_exp_video] [ERROR] Experiment failed: no frame received within 10s")
-        return None   
+        return None
     else:
         prev_frame = frame
         print("[save_exp_video] [INFO] Read first frame")
 
-    # Run experiment with or without widget displayed
+    def process_frame(frame, prev_frame, frame_idx, event_hist):
+        """Shared per-frame logic for both display modes."""
+        frames.append(frame)
+        event_image = e_camera_emulator.get_events_image_rgb(
+            frame, prev_frame, 30,
+            record_off_events=True,
+            register_off_events_as_on=False
+        )
+        visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
+
+        gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY) if event_image.ndim == 3 else event_image
+        gray_event = gray_event.astype(np.float32)
+        if event_hist is None:
+            event_hist = np.zeros_like(gray_event, dtype=np.float32)
+        event_hist += np.abs(gray_event)
+
+        # Accumulate histogram into list
+        if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+            hist_idx = frame_idx // WINDOW_SIZE
+            if hist_idx < 150:
+                hist_binary = (event_hist > 0).astype(np.uint8)
+                hist_packed = np.packbits(hist_binary, axis=None)
+                histograms.append((hist_idx, hist_packed))
+
+        # Debug images
+        if save_debug_images:
+            cv.imwrite(os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"), visual_event_image)
+            if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+                hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+                cv.imwrite(os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png"), hist_vis)
+
+        # Reset histogram window
+        if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
+            event_hist = np.zeros_like(gray_event, dtype=np.float32)
+
+        return event_hist
+
     start_time = time.time()
     event_hist = None
 
     if display_widget:
         try:
-            # Record data for experiment time
             while time.time() - start_time < exp_time:
                 frame = picam2_.capture_array("main")
                 if frame is None:
                     continue
-                
-                # Add to widget 
                 cv.imshow("Experiment Camera", frame)
-                key = cv.waitKey(1) & 0xFF
-                if key == ord('q'):
+                if cv.waitKey(1) & 0xFF == ord('q'):
                     print("[INFO] Early exit triggered")
                     break
-
-                frames.append(frame)
-
-                # Emulate event camera
-                event_image = e_camera_emulator.get_events_image_rgb(
-                    frame,
-                    prev_frame,
-                    30,
-                    record_off_events=True,
-                    register_off_events_as_on=False
-                )
-
-                visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
+                event_hist = process_frame(frame, prev_frame, frame_idx, event_hist)
                 prev_frame = frame
-
-                # Add to spatial histogram
-                if event_image.ndim == 3:
-                    gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
-                else:
-                    gray_event = event_image
-
-                gray_event = gray_event.astype(np.float32)
-
-                if event_hist is None:
-                    event_hist = np.zeros_like(gray_event, dtype=np.float32)
-
-                event_hist += np.abs(gray_event)
-
-                # Save event spatial histogram after accumulation
-                if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-                    # Save in bit format
-                    hist_idx = frame_idx // WINDOW_SIZE
-                    if hist_idx < 150:
-                        # Convert from intensity to occupancy (1 bit)
-                        hist_binary = (event_hist > 0).astype(np.uint8)
-                                              
-                        # Convert uint8 to 1 bit 
-                        hist_packed = np.packbits(hist_binary, axis=None)
-                        # Save
-                        hist_path = os.path.join(hist_dir, f"hist_{hist_idx:03d}.npy")
-                        np.save(hist_path, hist_packed)
-
-                # Save event data frames and spatial histogram images if debug enabled
-                if save_debug_images:
-                    # Save event frame
-                    cv.imwrite(
-                        os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
-                        visual_event_image
-                    )
-
-                    # Save normalised visualisation of histogram data
-                    if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-                        hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX)
-                        hist_vis = hist_vis.astype(np.uint8)
-                        vis_path = os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png")
-                        cv.imwrite(vis_path, hist_vis)
-                
-                # Reset histogram window
-                if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-                    event_hist = np.zeros_like(gray_event, dtype=np.float32)
-
                 frame_idx += 1
-
         except Exception as exc:
             print(f"[save_exp_video] [ERROR] Widget failed: {exc}\n")
-            return None 
-
+            return None
         finally:
             cv.destroyAllWindows()
     else:
-        # Record data for experiment time
         while time.time() - start_time < exp_time:
             frame = picam2_.capture_array("main")
             if frame is None:
                 continue
-
-            frames.append(frame)
-
-            # Emulate event camera
-            event_image = e_camera_emulator.get_events_image_rgb(
-                frame,
-                prev_frame,
-                30,
-                record_off_events=True,
-                register_off_events_as_on=False
-            )
-
-            visual_event_image = e_camera_emulator.get_visual_events_image(event_image)
+            event_hist = process_frame(frame, prev_frame, frame_idx, event_hist)
             prev_frame = frame
-
-            # Add to spatial histogram
-            if event_image.ndim == 3:
-                gray_event = cv.cvtColor(event_image, cv.COLOR_BGR2GRAY)
-            else:
-                gray_event = event_image
-
-            gray_event = gray_event.astype(np.float32)
-
-            if event_hist is None:
-                event_hist = np.zeros_like(gray_event, dtype=np.float32)
-
-            event_hist += np.abs(gray_event)
-
-            # Save event spatial histogram after accumulation
-            if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-                # Save in bit format
-                hist_idx = frame_idx // WINDOW_SIZE
-                if hist_idx < 150:
-                    # Convert from intensity to occupancy (1 bit)
-                    hist_binary = (event_hist > 0).astype(np.uint8)
-                                        
-                    # Convert uint8 to 1 bit 
-                    hist_packed = np.packbits(hist_binary, axis=None)
-                    # Save
-                    hist_path = os.path.join(hist_dir, f"hist_{hist_idx:03d}.npy")
-                    np.save(hist_path, hist_packed)
-
-            # Save event data frames and spatial histogram images if debug enabled
-            if save_debug_images:
-                # Save event frame
-                cv.imwrite(
-                    os.path.join(event_frame_dir, f"event_{frame_idx:04d}.png"),
-                    visual_event_image
-                )
-
-                # Save normalised visualisation of histogram data
-                if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-                    hist_vis = cv.normalize(event_hist, None, 0, 255, cv.NORM_MINMAX)
-                    hist_vis = hist_vis.astype(np.uint8)
-                    vis_path = os.path.join(event_hist_dir, f"event_hist_vis_{frame_idx:05d}.png")
-                    cv.imwrite(vis_path, hist_vis)
-            
-            # Reset histogram window
-            if frame_idx % WINDOW_SIZE == 0 and frame_idx > 0:
-                event_hist = np.zeros_like(gray_event, dtype=np.float32)
-
             frame_idx += 1
 
     if picam2_ is not None:
@@ -706,9 +908,16 @@ def save_exp_video(picam2_, display_widget = False, save_debug_images = False, e
     for i, frame in enumerate(frames):
         cv.imwrite(f"{baseline_folder}/frame_{i:04d}.jpeg", frame)
 
+    # Write all histograms into experiment_results.txt
+    results_path = os.path.join(results_dir, "experiment_results.txt")
+    with open(results_path, "w") as f:
+        f.write("=== HISTOGRAMS ===\n")
+        for hist_idx, hist_packed in histograms:
+            f.write(f"hist_{hist_idx:03d}:{','.join(str(v) for v in hist_packed.tolist())}\n")
+        f.write("=== POSE ESTIMATES ===\n")
+        # Pose estimates written later by process_baseline_data()
 
     print("Experiment recording complete\n")
-
     return True
 
 
@@ -717,82 +926,56 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD=(5, 3),
                            baseline_folder="outputs/baseline",
                            pose_folder="outputs/baseline_pose",
                            save_debug_images=False):
-
     print("Processing baseline frames")
-
-    images = sorted(
-        glob.glob(os.path.join(baseline_folder, "*.jpeg"))
-    )
+    images = sorted(glob.glob(os.path.join(baseline_folder, "*.jpeg")))
     print("Found images:", len(images))
-
     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
     os.makedirs(pose_folder, exist_ok=True)
 
-    # Define pose estimate files
-    results_dir = "outputs/experiment_results"
-    position_file = open(os.path.join(results_dir, "camera_position.csv"), "w")
-    attitude_file = open(os.path.join(results_dir, "camera_attitude.csv"), "w")
-    position_file.write("x,y,z\n")
-    attitude_file.write("roll,pitch,yaw\n")
+    results_path = "outputs/experiment_results/experiment_results.txt"
+    pose_rows = []  # Collect all rows first, then append
 
     for fname in images:
         img = cv.imread(fname)
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
         base = os.path.basename(fname)
         name, _ = os.path.splitext(base)
 
         for board_id, roi in enumerate(ROIS):
-
             x1, y1, x2, y2 = roi
-
-            # Mask out outside ROI
             mask = np.zeros_like(gray, dtype=np.uint8)
             mask[y1:y2, x1:x2] = 255
-
-            # Apply mask
             working_img = cv.bitwise_and(gray, gray, mask=mask)
-
-            # Detect chessboard corners
             ret, corners = cv.findChessboardCorners(working_img, CHESSBOARD, None)
 
-            # Skip if not detected
             if not ret:
-                # Blank out pose estimate to preserve order
-                position_file.write("0,0,0\n")
-                attitude_file.write("0,0,0\n")
+                pose_rows.append("0,0,0,0,0,0")
                 continue
 
             corners = cv.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
-
-            # Pose estimation
             obj_model = objpoints_3boards[board_id]
             success, rvec, tvec = cv.solvePnP(obj_model, corners, mtx, dist)
 
-            # Write out pose estimate
             if success:
-                r = rvec.flatten()
                 t = tvec.flatten()
-
-                position_file.write(f"{t[0]:.6f},{t[1]:.6f},{t[2]:.6f}\n")
-                attitude_file.write(f"{r[0]:.6f},{r[1]:.6f},{r[2]:.6f}\n")
-
+                r = rvec.flatten()
+                pose_rows.append(f"{t[0]:.6f},{t[1]:.6f},{t[2]:.6f},{r[0]:.6f},{r[1]:.6f},{r[2]:.6f}")
             else:
-                position_file.write("0,0,0\n")
-                attitude_file.write("0,0,0\n")
+                pose_rows.append("0,0,0,0,0,0")
 
-            # Draw detected corners onto image for debug output
             if save_debug_images and success:
                 cv.drawChessboardCorners(img, CHESSBOARD, corners, ret)
 
-        # Save annotated image only if debug flag is on
         if save_debug_images:
-            output_name = os.path.join(pose_folder, f"{name}_multi_pose.png")
-            cv.imwrite(output_name, img)
-        
-    position_file.close()
-    attitude_file.close()
+            cv.imwrite(os.path.join(pose_folder, f"{name}_multi_pose.png"), img)
+
+    # Append pose estimates after the histogram section
+    with open(results_path, "a") as f:
+        f.write("x,y,z,roll,pitch,yaw\n")
+        for row in pose_rows:
+            f.write(row + "\n")
+
+    print("Baseline processing complete\n")
 
 
 # Delete experiment images, and debug images if produced

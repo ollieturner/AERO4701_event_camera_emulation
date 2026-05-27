@@ -140,7 +140,6 @@ while True:
         continue
 
     # Run experiment
-    # exp_success = h.save_exp_video(picam2_, display_widget = SHOW_CAMERA_FEED, save_debug_images = SAVE_DEBUG_IMAGES, exp_time=20.0)
     exp_success = h.save_exp_video(picam2_, display_widget = SHOW_CAMERA_FEED, save_debug_images = SAVE_DEBUG_IMAGES, exp_time=20.0)
 
 
@@ -153,7 +152,6 @@ while True:
 
     ## BASELINE DATA PROCESSING
     # Cycle through images in baseline/, estimate poses, save to file
-    # h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS, save_debug_images = SAVE_DEBUG_IMAGES)
     h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS, save_debug_images=SAVE_DEBUG_IMAGES)
 
 
