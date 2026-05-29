@@ -52,7 +52,7 @@ while True:
 
     # Define ROIS of chessboards for calibration
     ROIS = h.define_rois()
-    # h.test_draw_rois(image_path="scripts/lcm/pi/test_to_calib_roi.jpg", ROIS=ROIS)
+    # h.test_draw_rois(image_path="outputs/debug_mode_focus.jpeg", ROIS=ROIS)
 
 
     ## OPEN AND CALIBRATE CAMERA
