@@ -1,8 +1,8 @@
 Generate lcm messages for c++ and python:
 
-lcm-gen -p example_t.lcm
+lcm-gen -p payload_msg_t.lcm
 
-lcm-gen -x example_t.lcm
+lcm-gen -x payload_msg_t.lcm
 
  \n Compile cpp:
 

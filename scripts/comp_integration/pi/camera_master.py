@@ -1,4 +1,4 @@
-# # Function-based program with camera program with simplified main
+# # Function-, camera-based program with LCM functions
 # ##########################################################################################################################
 ## LIBRARIES
 import cv2 as cv
@@ -6,15 +6,13 @@ import glob
 import camera_helper as h
 import lcm_helper as lcm_h
 
-# TODO put helper functions into class definition
-# TODO make header for class definition
+# TODO put helper functions into class definition?
+# TODO make header for class definition?
 
 ## FLAGS
 SHOW_CAMERA_FEED    = True   # Display live camera feed widget during capture
 SAVE_DEBUG_IMAGES   = True   # Save calibration_test, baseline_pose annotated images and event data
 DELETE_IMAGES       = False  # Delete all saved images (calibration + experiment) after each run
-# TODO remove and read off from LCM message 
-DEBUG_MODE          = True   # Save a focused frame to outputs/ after autofocus
 
 # TODO check on integration
 ## PAYLOAD CONTROLLER STATE ENUM
@@ -45,6 +43,7 @@ class Camera:
         # Camera configuration
         self.params               = None
         self.saved_cam_settings   = None
+        self.debug_mode           = False
         # Calibration results
         self.mtx                  = None
         self.dist                 = None
@@ -72,9 +71,9 @@ class Camera:
             PayloadState.SETUP:          None,
         }
 
-    # TODO add debug mode
-    def handle_state(self, state):
+    def handle_state(self, state, debug_mode):
         """Look up and call the handler for the given PayloadState int8 value."""
+        self.debug_mode = debug_mode
         handler = self.state_handlers.get(state)
         # Run relevant method (if not None)
         if handler is not None:
@@ -118,8 +117,7 @@ class Camera:
             self.params = h.prep_pi_cam_params()
 
             # Open camera and set focus
-            # TODO read debug mode from LCM message 
-            picam2_ = h.open_picam(self.params, picam2_, debug_mode=DEBUG_MODE)
+            picam2_ = h.open_picam(self.params, picam2_, debug_mode=self.debug_mode)
             if picam2_ is None:
                 print("Camera opening and focus failed\n")
                 CALIB_ATTEMPTS += 1
@@ -163,14 +161,13 @@ class Camera:
             # Cleanly close calibration camera
             h.close_camera(picam2_)
         # Unsuccessful calibration
-        else: 
+        else:
             print("Calibration failed\n")
             if picam2_ is not None:
                 h.close_camera(picam2_)
 
         # Publish calibration status to payload controller
-        # TODO fix publishing
-        lcm_h.publish_cam_msg(cam_calib_complete=CALIB_FLAG)
+        lcm_h.publish_cam_msg(cam_status=CALIB_FLAG)
 
     def handle_deploy(self):
         """
@@ -183,15 +180,13 @@ class Camera:
         # Check camera opened ok
         if picam2_ is None:
             print("Camera opening and focus failed for experiment\n")
-            # TODO fix publishing
-            lcm_h.publish_cam_msg(exp_complete=False)
+            lcm_h.publish_cam_msg(cam_status=False)
             return
 
         self.picam2 = picam2_
 
         # Publish ok to controller
-        # TODO fix publishing
-        lcm_h.publish_cam_msg(deploy_complete=True)
+        lcm_h.publish_cam_msg(cam_status=True)
 
     def handle_running(self):
         """
@@ -200,18 +195,16 @@ class Camera:
         """
         # Run experiment
         self.hist_records = h.save_exp_video(self.picam2, display_widget=False, save_debug_images=False, exp_time=20.0, WINDOW_SIZE=1)
-        # exp_success = h.save_exp_video(self.picam2, display_widget=SHOW_CAMERA_FEED, save_debug_images=SAVE_DEBUG_IMAGES, exp_time=20.0)
+        # self.hist_records = h.save_exp_video(self.picam2, display_widget=SHOW_CAMERA_FEED, save_debug_images=SAVE_DEBUG_IMAGES, exp_time=20.0)
 
         # Check experiment was ok
         if self.hist_records is None:
             print("Experiment failed\n")
-            # TODO fix publishing
-            lcm_h.publish_cam_msg(exp_complete=False)
+            lcm_h.publish_cam_msg(cam_status=False)
             return
 
         # Publish ok to controller
-        # TODO fix publishing
-        lcm_h.publish_cam_msg(running_complete=True)
+        lcm_h.publish_cam_msg(cam_status=True)
 
     def handle_save_results(self):
         """
@@ -228,8 +221,7 @@ class Camera:
         h.cleanup_images(DELETE_IMAGES)
 
         # Publish ok to controller
-        # TODO Fix publishing
-        lcm_h.publish_cam_msg(exp_complete=True)
+        lcm_h.publish_cam_msg(cam_status=True)
         print("\nExperiment complete. Waiting for next calibration trigger...\n")
 
     def handle_terminate_run(self):
@@ -242,8 +234,7 @@ class Camera:
             h.close_camera(self.picam2)
             self.picam2 = None
 
-        # TODO fix publishing
-        lcm_h.publish_cam_msg(terminate_complete=True)
+        lcm_h.publish_cam_msg(cam_status=True)
 
     def handle_error(self):
         """
@@ -265,10 +256,300 @@ camera = Camera()
 # Waits for state messages from the payload controller and dispatches to the
 # appropriate handler method. Controller drives all transitions.
 while True:
-    msg   = lcm_h.wait_for_payload_comp_msg()
-    state = msg.state 
+    msg = lcm_h.wait_for_payload_comp_msg()
+    camera.handle_state(msg.cont_state, msg.debug_mode)
 
-    camera.handle_state(state)
+
+#########################
+# ~ # Checking reprojection error after calibration
+# ~ # h.check_repoj_error(objpoints, rvecs, tvecs, mtx, dist, imgpoints)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # Function-based program with camera program with simplified main
+# # ##########################################################################################################################
+# ## LIBRARIES
+# import cv2 as cv
+# import glob
+# import camera_helper as h
+# import lcm_helper as lcm_h
+
+# # TODO put helper functions into class definition
+# # TODO make header for class definition
+
+# ## FLAGS
+# SHOW_CAMERA_FEED    = True   # Display live camera feed widget during capture
+# SAVE_DEBUG_IMAGES   = True   # Save calibration_test, baseline_pose annotated images and event data
+# DELETE_IMAGES       = False  # Delete all saved images (calibration + experiment) after each run
+# # TODO remove and read off from LCM message 
+# DEBUG_MODE          = True   # Save a focused frame to outputs/ after autofocus
+
+# # TODO check on integration
+# ## PAYLOAD CONTROLLER STATE ENUM
+# from enum import IntEnum
+
+# class PayloadState(IntEnum):
+#     IDLE          = 1
+#     SETUP         = 2
+#     CALIBRATE_CAM = 3
+#     DEPLOY        = 4
+#     RUNNING       = 5
+#     SAVE_RESULTS  = 6
+#     TERMINATE_RUN = 7
+#     ERROR         = 8
+
+
+# ## CAMERA CLASS
+# class Camera:
+#     """
+#     Manages camera state and experiment lifecycle.
+#     Instantiated once at startup; handler methods are called by the main loop
+#     in response to payload controller state messages over LCM.
+#     """
+
+#     def __init__(self):
+#         # Camera handle
+#         self.picam2               = None
+#         # Camera configuration
+#         self.params               = None
+#         self.saved_cam_settings   = None
+#         # Calibration results
+#         self.mtx                  = None
+#         self.dist                 = None
+#         # Chessboard data
+#         self.objpoints_3boards    = None
+#         self.ROIS                 = None
+#         # Output directories
+#         # TODO not really necessary but leave for now?
+#         self.output_dir           = None
+#         self.calib_folder         = None
+#         self.baseline_folder      = None
+#         self.baseline_pose_folder = None
+#         # Results
+#         self.hist_records         = None
+
+#         # Dispatch table — maps PayloadState int8 values to handler methods
+#         self.state_handlers = {
+#             PayloadState.CALIBRATE_CAM:  self.handle_calibrate_cam,
+#             PayloadState.DEPLOY:         self.handle_deploy,
+#             PayloadState.RUNNING:        self.handle_running,
+#             PayloadState.SAVE_RESULTS:   self.handle_save_results,
+#             PayloadState.TERMINATE_RUN:  self.handle_terminate_run,
+#             PayloadState.ERROR:          self.handle_error,
+#             PayloadState.IDLE:           None,
+#             PayloadState.SETUP:          None,
+#         }
+
+#     # TODO add debug mode
+#     def handle_state(self, state):
+#         """Look up and call the handler for the given PayloadState int8 value."""
+#         handler = self.state_handlers.get(state)
+#         # Run relevant method (if not None)
+#         if handler is not None:
+#             handler()
+
+#     ## STATE HANDLER METHODS
+
+#     def handle_calibrate_cam(self):
+#         """
+#         CALIBRATE_CAM: Focus and calibrate camera.
+#         Sets up directories and parameters, attempts camera calibration,
+#         saves settings, and publishes result to controller.
+#         """
+#         # Setup directories
+#         # TODO not really necessary but leave for now?
+#         self.output_dir, self.calib_folder, self.baseline_folder, self.baseline_pose_folder = h.setup_directories()
+
+#         # Calibration parameters
+#         # TODO Delete MAX_BOARDS
+#         # TODO fix settings
+#         CHESSBOARD, MAX_BOARDS, SQUARE_SIZE, L, MAX_CALIB_ATTEMPTS = h.setup_calib_parameters()
+
+#         # Ground truth chessboard corner coordinates
+#         self.objpoints_3boards = h.get_cboard_gt(L, CHESSBOARD, SQUARE_SIZE)
+
+#         # Define ROIs of chessboards for calibration
+#         # TODO fix settings on calibration
+#         self.ROIS = h.define_rois()
+#         # h.test_draw_rois(image_path="outputs/debug_mode_focus.jpeg", ROIS=self.ROIS)
+
+#         # Prepare for opening and calibrating camera
+#         CALIB_FLAG     = False
+#         CALIB_ATTEMPTS = 0
+#         picam2_        = None
+
+#         # Attempt calibration until successful or reached max attempts
+#         while not CALIB_FLAG and CALIB_ATTEMPTS < MAX_CALIB_ATTEMPTS:
+#             print("Starting calibration...\n")
+
+#             # Read parameters in from file
+#             self.params = h.prep_pi_cam_params()
+
+#             # Open camera and set focus
+#             # TODO read debug mode from LCM message 
+#             picam2_ = h.open_picam(self.params, picam2_, debug_mode=DEBUG_MODE)
+#             if picam2_ is None:
+#                 print("Camera opening and focus failed\n")
+#                 CALIB_ATTEMPTS += 1
+#                 continue
+
+#             # Take short video and save to calibration folder
+#             h.save_calib_video_picam(picam2_, SHOW_CAMERA_FEED, calib_time=20.0)
+
+#             # Load images
+#             images = glob.glob("outputs/calibration/*.jpeg")
+#             if len(images) < 5:
+#                 print("Not enough frames, retrying...\n")
+#                 CALIB_ATTEMPTS += 1
+#                 if picam2_ is not None:
+#                     picam2_ = h.close_camera(picam2_)
+#                 continue
+
+#             # Detect chessboards
+#             objpoints, imgpoints, img_size = h.detect_cboard_calib(images, self.ROIS, save_debug_images=SAVE_DEBUG_IMAGES)
+#             if len(objpoints) < 3:
+#                 print("Not enough valid detections, retrying...")
+#                 CALIB_ATTEMPTS += 1
+#                 if picam2_ is not None:
+#                     picam2_ = h.close_camera(picam2_)
+#                 continue
+
+#             # Calibrate camera
+#             ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, img_size, None, None)
+#             print("Camera matrix:\n", mtx)
+#             self.mtx   = mtx
+#             self.dist  = dist
+#             CALIB_FLAG = True
+#             CALIB_ATTEMPTS += 1
+
+#         # Successful calibration
+#         if CALIB_FLAG:
+#             # Save settings
+#             print("Camera calibration complete\n")
+#             self.saved_cam_settings = h.extract_applied_settings(picam2_)
+
+#             # Cleanly close calibration camera
+#             h.close_camera(picam2_)
+#         # Unsuccessful calibration
+#         else: 
+#             print("Calibration failed\n")
+#             if picam2_ is not None:
+#                 h.close_camera(picam2_)
+
+#         # Publish calibration status to payload controller
+#         # TODO fix publishing
+#         lcm_h.publish_cam_msg(cam_calib_complete=CALIB_FLAG)
+
+#     def handle_deploy(self):
+#         """
+#         DEPLOY: Open camera with calibrated settings ready for the experiment.
+#         Publishes OK to controller when camera is ready, or ERROR on failure.
+#         """
+#         # Reopen camera with saved settings
+#         picam2_ = h.open_picam_for_exp(self.params, self.picam2, self.saved_cam_settings)
+
+#         # Check camera opened ok
+#         if picam2_ is None:
+#             print("Camera opening and focus failed for experiment\n")
+#             # TODO fix publishing
+#             lcm_h.publish_cam_msg(exp_complete=False)
+#             return
+
+#         self.picam2 = picam2_
+
+#         # Publish ok to controller
+#         # TODO fix publishing
+#         lcm_h.publish_cam_msg(deploy_complete=True)
+
+#     def handle_running(self):
+#         """
+#         RUNNING: Run the experiment (take video).
+#         Publishes ok to controller on success, or ERROR on failure.
+#         """
+#         # Run experiment
+#         self.hist_records = h.save_exp_video(self.picam2, display_widget=False, save_debug_images=False, exp_time=20.0, WINDOW_SIZE=1)
+#         # exp_success = h.save_exp_video(self.picam2, display_widget=SHOW_CAMERA_FEED, save_debug_images=SAVE_DEBUG_IMAGES, exp_time=20.0)
+
+#         # Check experiment was ok
+#         if self.hist_records is None:
+#             print("Experiment failed\n")
+#             # TODO fix publishing
+#             lcm_h.publish_cam_msg(exp_complete=False)
+#             return
+
+#         # Publish ok to controller
+#         # TODO fix publishing
+#         lcm_h.publish_cam_msg(running_complete=True)
+
+#     def handle_save_results(self):
+#         """
+#         SAVE_RESULTS: Baseline processing, save experiment data, cleanup.
+#         Publishes OK to controller when done.
+#         """
+#         # Cycle through images in baseline, estimate poses, save to file
+#         h.process_baseline_data(self.objpoints_3boards, self.mtx, self.dist, self.ROIS, save_debug_images=SAVE_DEBUG_IMAGES)
+
+#         # Save histogram results
+#         h.save_exp_results(self.hist_records)
+
+#         # Cleanup
+#         h.cleanup_images(DELETE_IMAGES)
+
+#         # Publish ok to controller
+#         # TODO Fix publishing
+#         lcm_h.publish_cam_msg(exp_complete=True)
+#         print("\nExperiment complete. Waiting for next calibration trigger...\n")
+
+#     def handle_terminate_run(self):
+#         """
+#         TERMINATE_RUN: Turn off camera cleanly.
+#         Publishes OK to controller when done.
+#         """
+#         # Turn off camera
+#         if self.picam2 is not None:
+#             h.close_camera(self.picam2)
+#             self.picam2 = None
+
+#         # TODO fix publishing
+#         lcm_h.publish_cam_msg(terminate_complete=True)
+
+#     def handle_error(self):
+#         """
+#         ERROR: Received error from controller.
+#         Turn off camera if open.
+#         """
+#         # Turn off camera
+#         if self.picam2 is not None:
+#             h.close_camera(self.picam2)
+#             self.picam2 = None
+
+
+# ## MAIN
+
+# print("Starting camera program...")
+
+# camera = Camera()
+
+# # Waits for state messages from the payload controller and dispatches to the
+# # appropriate handler method. Controller drives all transitions.
+# while True:
+#     msg   = lcm_h.wait_for_payload_comp_msg()
+#     state = msg.state 
+
+#     camera.handle_state(state)
 
 
 #########################
