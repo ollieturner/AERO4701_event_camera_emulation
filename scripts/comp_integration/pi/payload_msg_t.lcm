@@ -1,13 +1,25 @@
 package exlcm;
 
-struct payload_comp_msg_t
+struct payload_cont_to_cam_msg_t
 {
-    boolean  cam_enabled;
-    boolean  exp_enabled;
+    int8_t  cont_state; // change to contain numbers 1 to 8 (enums)
+    boolean  debug_mode; // TRUE for debug_mode, FALSE for normal operation
 }
 
 struct cam_msg_t
 {
-    boolean  cam_calib_complete;
-    boolean  exp_complete;
+    boolean  cam_status; // TRUE for complete, FALSE for error
 }
+
+
+/*
+struct payload_cont_state_msg_t
+{
+    int8_t  cont_state; // change to contain numbers 1 to 8 (will be enums)
+}
+
+struct debug_mode_msg_t
+{
+    boolean  debug_mode; // TRUE for debug_mode, FALSE for normal operation
+}
+*/

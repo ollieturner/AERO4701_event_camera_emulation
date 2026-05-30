@@ -9,16 +9,14 @@ import struct
 
 class cam_msg_t(object):
 
-    __slots__ = ["cam_calib_complete", "exp_complete"]
+    __slots__ = ["cam_status"]
 
-    __typenames__ = ["boolean", "boolean"]
+    __typenames__ = ["boolean"]
 
-    __dimensions__ = [None, None]
+    __dimensions__ = [None]
 
     def __init__(self):
-        self.cam_calib_complete = False
-        """ LCM Type: boolean """
-        self.exp_complete = False
+        self.cam_status = False
         """ LCM Type: boolean """
 
     def encode(self):
@@ -28,7 +26,7 @@ class cam_msg_t(object):
         return buf.getvalue()
 
     def _encode_one(self, buf):
-        buf.write(struct.pack(">bb", self.cam_calib_complete, self.exp_complete))
+        buf.write(struct.pack(">b", self.cam_status))
 
     @staticmethod
     def decode(data: bytes):
@@ -43,14 +41,13 @@ class cam_msg_t(object):
     @staticmethod
     def _decode_one(buf):
         self = cam_msg_t()
-        self.cam_calib_complete = bool(struct.unpack('b', buf.read(1))[0])
-        self.exp_complete = bool(struct.unpack('b', buf.read(1))[0])
+        self.cam_status = bool(struct.unpack('b', buf.read(1))[0])
         return self
 
     @staticmethod
     def _get_hash_recursive(parents):
         if cam_msg_t in parents: return 0
-        tmphash = (0xb96f7b46cac246b9) & 0xffffffffffffffff
+        tmphash = (0x69b5d2f0771726c5) & 0xffffffffffffffff
         tmphash  = (((tmphash<<1)&0xffffffffffffffff) + (tmphash>>63)) & 0xffffffffffffffff
         return tmphash
     _packed_fingerprint = None

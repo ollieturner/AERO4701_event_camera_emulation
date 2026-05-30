@@ -6,3 +6,4 @@ lcm-gen 1.5.2
 
 from .payload_comp_msg_t import payload_comp_msg_t as payload_comp_msg_t
 from .cam_msg_t import cam_msg_t as cam_msg_t
+from .payload_cont_to_cam_msg_t import payload_cont_to_cam_msg_t as payload_cont_to_cam_msg_t
