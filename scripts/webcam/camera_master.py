@@ -40,7 +40,7 @@ objpoints_3boards = h.get_cboard_gt()
 
 # Define ROIS of chessboards for calibration
 ROIS = h.define_rois()
-h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
+h.test_draw_rois(image_path="outputs/calibration/frame_0000.jpeg", ROIS=ROIS)
 
 
 
@@ -52,7 +52,7 @@ h.test_draw_rois(image_path="outputs/calibration/frame_0023.jpeg", ROIS=ROIS)
 
 ## PREPARE CAMERA
 # Read parameters in from file
-args = h.prep_webcam_params()
+# args = h.prep_webcam_params()
 # args = h.prep_pi_cam_params()
 
 
@@ -103,21 +103,21 @@ print("Camera calibration complete\n")
 
 
 
-# # SET/WAIT
-# TODO check with integration
+# # # SET/WAIT
+# # TODO check with integration
 
 
-# RECORD EXPERIMENT 
-# Take video with baseline images/frames
-print("Starting experiment")
-h.save_exp_video(args)
-print("Experiment recording complete")
+# # RECORD EXPERIMENT 
+# # Take video with baseline images/frames
+# print("Starting experiment")
+# h.save_exp_video(args)
+# print("Experiment recording complete")
 
 
-## BASELINE DATA PROCESSING
-print("Processing baseline frames")
+# ## BASELINE DATA PROCESSING
+# print("Processing baseline frames")
 
-# Cycle through images in baseline/, estimate poses, save to file then delete images 
-h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS)
+# # Cycle through images in baseline/, estimate poses, save to file then delete images 
+# h.process_baseline_data(objpoints_3boards, mtx, dist, ROIS)
 
 

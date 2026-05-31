@@ -40,7 +40,7 @@ def setup_calib_parameters():
 
 # Define ROIS centred in the image
 # Scale controls ROI size relative to image size
-def define_rois(width=640, height=480, scale=0.38):
+def define_rois(width=1033, height=682, scale=0.38):
     w = int(width * scale)
     h = int(height * scale)
 
