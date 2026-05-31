@@ -103,7 +103,7 @@ class Camera:
         # Define ROIs of chessboards for calibration
         # TODO fix settings on calibration
         self.ROIS = h.define_rois()
-        # h.test_draw_rois(image_path="outputs/debug_mode_focus.jpeg", ROIS=self.ROIS)
+        h.test_draw_rois(image_path="outputs/debug_mode_focus.jpeg", ROIS=self.ROIS)
 
         # Prepare for opening and calibrating camera
         CALIB_FLAG     = False
@@ -125,7 +125,7 @@ class Camera:
                 continue
 
             # Take short video and save to calibration folder
-            h.save_calib_video_picam(picam2_, SHOW_CAMERA_FEED, calib_time=20.0)
+            h.save_calib_video_picam(picam2_, SHOW_CAMERA_FEED, calib_time=5.0)
 
             # Load images
             images = glob.glob("outputs/calibration/*.jpeg")

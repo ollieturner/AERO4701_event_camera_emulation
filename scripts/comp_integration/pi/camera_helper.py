@@ -32,7 +32,7 @@ def setup_calib_parameters():
     return CHESSBOARD, SQUARE_SIZE, L, MAX_CALIB_ATTEMPTS
 
 # Define ROIS centred in the image
-def define_rois(width=640, height=480, scale=0.38):
+def define_rois(width=640, height=480, scale=0.5):
     # Scale controls ROI size relative to image size
     w = int(width * scale)
     h = int(height * scale)
@@ -41,10 +41,11 @@ def define_rois(width=640, height=480, scale=0.38):
     cy = height // 2
 
     # Offsets for triangular layout
-    dx = int(width * 0.18)
-    dy = int(height * 0.16)
+    dx = int(width * 0.2)
+    dy = int(height * 0.2)
 
     top_extra = int(height * 0.1)   # extra upward movement
+    bottom_extra = int(height * 0.1)   # extra downward movement
 
     ROIS = [
         # top board
@@ -52,12 +53,12 @@ def define_rois(width=640, height=480, scale=0.38):
          cx + w//2, cy + h//2 - dy - top_extra),
 
         # bottom-left board
-        (cx - w//2 - dx, cy - h//2 + dy,
-         cx + w//2 - dx, cy + h//2 + dy),
+        (cx - w//2 - dx, cy - h//2 + dy + bottom_extra,
+         cx + w//2 - dx, cy + h//2 + dy + bottom_extra),
 
         # bottom-right board
-        (cx - w//2 + dx, cy - h//2 + dy,
-         cx + w//2 + dx, cy + h//2 + dy),
+        (cx - w//2 + dx, cy - h//2 + dy + bottom_extra,
+         cx + w//2 + dx, cy + h//2 + dy + bottom_extra),
     ]
 
     return ROIS
@@ -179,9 +180,14 @@ def detect_cboard_calib(images, ROIS, CHESSBOARD=(5, 3), SQUARE_SIZE=0.00225, sa
 
             # Apply mask (keep full image size)
             masked_img = cv.bitwise_and(gray, gray, mask=mask)
+            
+            flags = (cv.CALIB_CB_ADAPTIVE_THRESH + 
+                     cv.CALIB_CB_NORMALIZE_IMAGE) # + 
+                     # cv.CALIB_CB_FILTER_QUADS)
+            ret, corners = cv.findChessboardCorners(gray, CHESSBOARD, None, flags)
 
             # Detect corners and save
-            ret, corners = cv.findChessboardCorners(masked_img, CHESSBOARD, None)
+            # ret, corners = cv.findChessboardCorners(masked_img, CHESSBOARD, None)
             if not ret:
                 continue
             corners2 = cv.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
@@ -657,16 +663,16 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD=(5, 3),
                 if save_debug_images:
                     cv.drawChessboardCorners(img, CHESSBOARD, corners, ret)
 
-        # Only write a pose if all 3 boards were detected
-        if len(tvecs_all) == 3:
-            t_centre = np.mean(tvecs_all, axis=0)
-            r_centre = np.mean(rvecs_all, axis=0)
-            results_file.write(struct.pack("<6f", t_centre[0], t_centre[1], t_centre[2],
-                                                  r_centre[0], r_centre[1], r_centre[2]))
-        else:
-            print(f"[WARNING] {fname}: only {len(tvecs_all)}/3 boards detected, skipping pose.")
-            # Write zeros to preserve frame order
-            results_file.write(struct.pack("<6f", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+        # ~ # Only write a pose if all 3 boards were detected
+        # ~ if len(tvecs_all) == 3:
+        t_centre = np.mean(tvecs_all, axis=0)
+        r_centre = np.mean(rvecs_all, axis=0)
+        results_file.write(struct.pack("<6f", t_centre[0], t_centre[1], t_centre[2],
+                                              r_centre[0], r_centre[1], r_centre[2]))
+        # ~ else:
+            # ~ print(f"[WARNING] {fname}: only {len(tvecs_all)}/3 boards detected, skipping pose.")
+            # ~ # Write zeros to preserve frame order
+            # ~ results_file.write(struct.pack("<6f", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
         if save_debug_images:
             output_name = os.path.join(pose_folder, f"{name}_multi_pose.png")
