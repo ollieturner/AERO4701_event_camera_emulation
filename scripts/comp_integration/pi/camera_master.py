@@ -19,14 +19,14 @@ DELETE_IMAGES       = False  # Delete all saved images (calibration + experiment
 from enum import IntEnum
 
 class PayloadState(IntEnum):
-    IDLE          = 1
-    SETUP         = 2
-    CALIBRATE_CAM = 3
-    DEPLOY        = 4
-    RUNNING       = 5
-    SAVE_RESULTS  = 6
-    TERMINATE_RUN = 7
-    ERROR         = 8
+    IDLE          = 0
+    SETUP         = 1
+    CALIBRATE_CAM = 2
+    DEPLOY        = 3
+    RUNNING       = 4
+    SAVE_RESULTS  = 5
+    TERMINATE_RUN = 6
+    ERROR         = 7
 
 
 ## CAMERA CLASS
@@ -87,6 +87,8 @@ class Camera:
         Sets up directories and parameters, attempts camera calibration,
         saves settings, and publishes result to controller.
         """
+        
+        print("[INFO] STATE: Calibrate\n")
         # Setup directories
         # TODO not really necessary but leave for now?
         self.output_dir, self.calib_folder, self.baseline_folder, self.baseline_pose_folder = h.setup_directories()
@@ -174,6 +176,8 @@ class Camera:
         DEPLOY: Open camera with calibrated settings ready for the experiment.
         Publishes OK to controller when camera is ready, or ERROR on failure.
         """
+        print("[INFO] STATE: Deploy\n")
+        
         # Reopen camera with saved settings
         picam2_ = h.open_picam_for_exp(self.params, self.picam2, self.saved_cam_settings)
 
@@ -193,9 +197,9 @@ class Camera:
         RUNNING: Run the experiment (take video).
         Publishes ok to controller on success, or ERROR on failure.
         """
+        print("[INFO] STATE: Running\n")
         # Run experiment
-        self.hist_records = h.save_exp_video(self.picam2, display_widget=False, save_debug_images=False, exp_time=20.0, WINDOW_SIZE=1)
-        # self.hist_records = h.save_exp_video(self.picam2, display_widget=SHOW_CAMERA_FEED, save_debug_images=SAVE_DEBUG_IMAGES, exp_time=20.0)
+        self.hist_records = h.save_exp_video(self.picam2, display_widget=SHOW_CAMERA_FEED, save_debug_images=SAVE_DEBUG_IMAGES, exp_time=30.0, WINDOW_SIZE=1)
 
         # Check experiment was ok
         if self.hist_records is None:
@@ -211,11 +215,17 @@ class Camera:
         SAVE_RESULTS: Baseline processing, save experiment data, cleanup.
         Publishes OK to controller when done.
         """
+        print("[INFO] STATE: Save Results\n")
         # Cycle through images in baseline, estimate poses, save to file
         h.process_baseline_data(self.objpoints_3boards, self.mtx, self.dist, self.ROIS, save_debug_images=SAVE_DEBUG_IMAGES)
 
         # Save histogram results
         h.save_exp_results(self.hist_records)
+        
+        # Turn off camera
+        if self.picam2 is not None:
+            h.close_camera(self.picam2)
+            self.picam2 = None
 
         # Cleanup
         h.cleanup_images(DELETE_IMAGES)
@@ -229,6 +239,7 @@ class Camera:
         TERMINATE_RUN: Turn off camera cleanly.
         Publishes OK to controller when done.
         """
+        print("[INFO] STATE: Terminate Run\n")
         # Turn off camera
         if self.picam2 is not None:
             h.close_camera(self.picam2)
@@ -241,6 +252,7 @@ class Camera:
         ERROR: Received error from controller.
         Turn off camera if open.
         """
+        print("[INFO] STATE: Error\n")
         # Turn off camera
         if self.picam2 is not None:
             h.close_camera(self.picam2)
