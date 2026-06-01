@@ -21,7 +21,7 @@ def setup_directories():
 
 
 def setup_calib_parameters():
-    CHESSBOARD = (5, 3)
+    CHESSBOARD = (3, 2) # (5, 3)
     MAX_BOARDS = 3
     SQUARE_SIZE = 0.00225       # in metres
     L = 0.034511                # for triangular positions of boards
@@ -119,7 +119,7 @@ def rotation_towards(origin):
     return R
 
 
-def get_cboard_gt(L = 0.034511, CHESSBOARD = (5, 3), SQUARE_SIZE = 0.00225):
+def get_cboard_gt(L = 0.034511, CHESSBOARD = (3, 2), SQUARE_SIZE = 0.00225):
     # Define 3 chessboard corner coordinates 
     h = np.sqrt(3)/2 * L
 
@@ -145,7 +145,7 @@ def get_cboard_gt(L = 0.034511, CHESSBOARD = (5, 3), SQUARE_SIZE = 0.00225):
     return objpoints_3boards
 
 
-def detect_cboard_calib(images, ROIS, CHESSBOARD=(5,3), SQUARE_SIZE=0.00225):
+def detect_cboard_calib(images, ROIS, CHESSBOARD=(4,3), SQUARE_SIZE=0.00225):
 
     debug_folder="outputs/calibration_test"
 

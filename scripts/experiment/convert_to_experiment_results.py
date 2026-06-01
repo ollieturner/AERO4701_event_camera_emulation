@@ -2,8 +2,8 @@
 convert_to_experiment_results.py
 
 Converts a legacy experiment folder containing:
-  - camera_attitude.txt  (CSV: roll,pitch,yaw — no header)
-  - camera_position.txt  (CSV: x,y,z — no header)
+  - camera_attitude.csv  (CSV: roll,pitch,yaw — no header)
+  - camera_position.csv  (CSV: x,y,z — no header)
   - histograms/hist_001.npy ... hist_099.npy  (packed 1-bit uint8 arrays)
 
 into a single binary experiment_results.bin with the layout:
@@ -16,6 +16,8 @@ into a single binary experiment_results.bin with the layout:
 Usage:
     python convert_to_experiment_results.py <input_folder> [output_file]
 """
+
+# in vscode run with: .\scripts\experiment\convert_to_experiment_results.py .\scripts\experiment\legacy_data\ experiment_results.bin
 
 import sys
 import os
