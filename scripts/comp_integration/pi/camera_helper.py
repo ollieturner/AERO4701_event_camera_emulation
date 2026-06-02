@@ -668,7 +668,7 @@ def process_baseline_data(objpoints_3boards, mtx, dist, ROIS, CHESSBOARD=(5, 3),
             # print(f"[WARNING] {fname}: no boards detected, writing zeros.")
             results_file.write(struct.pack("<6f", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
         else:
-            if len(tvecs_all) < 3:
+            # if len(tvecs_all) < 3:
                 # print(f"[WARNING] {fname}: only {len(tvecs_all)}/3 boards detected.")
             t_centre = np.mean(tvecs_all, axis=0)
             r_centre = np.mean(rvecs_all, axis=0)
